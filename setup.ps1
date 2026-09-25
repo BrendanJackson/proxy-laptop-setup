@@ -18,6 +18,24 @@
 
 $ErrorActionPreference = "Continue"
 
+# ---- Windows edition check ----
+# This script installs apps only; it never touches OS licensing. If the
+# Windows Setup key prompt was skipped or "I don't have a key" was chosen,
+# the machine is silently still on Home and nothing else will ever flag it.
+$editionId = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name EditionID -ErrorAction SilentlyContinue).EditionID
+if ($editionId -and $editionId -notmatch 'Professional|Enterprise|Education') {
+    Write-Host "`n=== WINDOWS EDITION WARNING ===" -ForegroundColor Red
+    Write-Host "This machine is running '$editionId', not Pro/Enterprise/Education." -ForegroundColor Red
+    Write-Host "setup.ps1 only installs apps -- it does not install or activate Windows." -ForegroundColor Red
+    Write-Host "If you have a Windows 11 Pro key and meant to be on Pro:" -ForegroundColor Yellow
+    Write-Host "  Settings > System > Activation > Change Product Key -- enter it there." -ForegroundColor Yellow
+    Write-Host "  This is a same-media edition change; you do NOT need to reimage again for this alone." -ForegroundColor Yellow
+    Write-Host "Continuing with app installs regardless. Re-run this script after upgrading to confirm this check clears.`n" -ForegroundColor Yellow
+}
+else {
+    Write-Host "Windows edition: $editionId -- OK.`n" -ForegroundColor Green
+}
+
 $apps = @(
     "Tailscale.Tailscale",
     "mRemoteNG.mRemoteNG",

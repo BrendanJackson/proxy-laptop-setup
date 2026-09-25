@@ -38,19 +38,83 @@ apply. Do it in this order:
    System → Activation → Change Product Key**, enter the same key. This is
    the fallback path, not the main one.
 
-Once you're at a signed-in Windows 11 Pro desktop, come back here.
+**The installer skipping the key prompt is common, not a sign something went
+wrong.** Depending on the ISO and which options you click through, Windows
+Setup often defaults straight to Home without ever asking for a key — it
+doesn't reliably prompt just because you have one. There's no dependable way
+to know from the installer alone which edition you landed on. Check with
+**Settings → System → About → Windows specification → Edition**, or just run
+`setup.ps1` — as of 2026-09-25 it checks this automatically at the top of the
+run and warns loudly (with the exact remediation steps) if you're still on
+Home, so you don't have to catch it by eye.
+
+Once you're at a signed-in Windows desktop (Pro or not — the script will
+tell you which), come back here.
 
 ## One-click install
+
+Open PowerShell **as Administrator** (right-click the Start button →
+"Terminal (Admin)" or "Windows PowerShell (Admin)") and paste this one line:
+
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process -Force; iex (irm https://raw.githubusercontent.com/BrendanJackson/proxy-laptop-setup/master/setup.ps1)
+```
+
+This is the one-click install — nothing to download, unzip, or unblock
+first. It works on a completely bare machine, before `git` even exists,
+because `iex` runs the script directly from memory rather than as a file on
+disk, so none of the local-file restrictions below ever come into play.
+
+<details>
+<summary>Why not just `git clone` + `.\setup.ps1`? (click to expand)</summary>
+
+That was the original instruction here, and it fails on a fresh Windows
+install for two compounding reasons:
+
+1. **Chicken-and-egg.** `git clone` needs `git`, which is one of the things
+   `setup.ps1` itself installs — so a bare machine can't run that command yet.
+2. **Downloaded files get blocked.** The natural workaround — clicking
+   GitHub's green **Code → Download ZIP** button instead — marks the
+   extracted `setup.ps1` with a "downloaded from the internet" flag (Windows
+   calls this Mark of the Web). Windows' default execution policy refuses to
+   run it, and even `Set-ExecutionPolicy RemoteSigned` still refuses it
+   because RemoteSigned requires downloaded scripts to be digitally signed.
+   You'll see exactly this:
+   ```
+   File ...\setup.ps1 cannot be loaded because running scripts is disabled on this system.
+   ```
+   or, after loosening the policy:
+   ```
+   File ...\setup.ps1 is not digitally signed. You cannot run this script on this system.
+   ```
+
+If you do want a local, editable copy (e.g. to change the app list before
+running it), that path still works — see "Local copy" below — it just needs
+one extra step to clear the download flag.
+
+</details>
+
+### Local copy (optional — if you want to edit the script first)
 
 ```powershell
 git clone https://github.com/BrendanJackson/proxy-laptop-setup.git
 cd proxy-laptop-setup
-.\setup.ps1        # run in PowerShell as Administrator
+Unblock-File .\setup.ps1          # clears the "downloaded from the internet" flag
+.\setup.ps1                       # run in PowerShell as Administrator
 ```
 
-`setup.ps1` installs everything winget can install in one pass, then clones
-`controls-field-tools` (see below). A handful of steps can't be scripted —
-they're printed at the end of the run, and repeated here:
+If you used GitHub's **Download ZIP** button instead of `git clone`, run
+`Unblock-File .\setup.ps1` (or `Get-ChildItem -Recurse | Unblock-File` to
+unblock the whole extracted folder) before the last line — a ZIP downloaded
+through a browser carries the same Mark-of-the-Web flag as a lone `.ps1`
+file.
+
+---
+
+`setup.ps1` installs everything winget can install in one pass, checks
+whether Windows is actually on Pro/Enterprise/Education (see below), then
+clones `controls-field-tools` (see below). A handful of steps can't be
+scripted — they're printed at the end of the run, and repeated here:
 
 1. Sign into Tailscale (browser SSO).
 2. Sign into Bitwarden, unlock the vault.
@@ -154,7 +218,7 @@ apply here.
 
 ## Definition of done
 
-- [ ] Windows 11 Pro licensed and activated on proxy laptop
+- [ ] Windows 11 Pro licensed and activated on proxy laptop (`setup.ps1`'s edition check prints "OK" at the top of its run)
 - [ ] `setup.ps1` run successfully — winget apps installed, controls-field-tools cloned
 - [ ] Tailscale signed in on proxy laptop + all 4 targets, MagicDNS on
 - [ ] mRemoteNG has 4 working saved connections, tested end to end
@@ -166,6 +230,19 @@ apply here.
 - [ ] Niagara Workbench / Metasys SCT confirmed and installed manually (separate licensing track)
 
 ## Changelog
+
+### 2026-09-25
+- Fixed a real install failure on the first machine this ran on: the
+  `git clone` + `.\setup.ps1` instructions don't work on a bare machine
+  (chicken-and-egg on `git`) and fail even worse if you instead use GitHub's
+  Download ZIP button (Mark-of-the-Web blocks the unsigned script, and
+  `Set-ExecutionPolicy RemoteSigned` doesn't fix that). Primary install
+  method is now a one-line `irm | iex` bootstrap that needs nothing
+  preinstalled; the clone path is now documented as the "local copy" option
+  with the required `Unblock-File` step.
+- Added a Windows edition check to `setup.ps1` — it was silently possible to
+  run the whole install on a machine that landed on Home (the installer
+  doesn't reliably prompt for the Pro key), with nothing ever flagging it.
 
 ### 2026-09-24
 - Repo created — closes the "repo push to GitHub still pending" item from the
