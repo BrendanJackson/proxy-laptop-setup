@@ -225,20 +225,62 @@ with genuinely no internet access. This laptop has internet (it's pulling
 apps via winget and signing into Tailscale/GitHub SSO), so that case doesn't
 apply here.
 
+## Preferences (dark mode, identity wallpaper)
+
+`setup.ps1` also sets two things that aren't strictly "install an app":
+
+- **Dark mode** — app + system theme, via the standard `Personalize` registry
+  keys. No restart needed.
+- **Identity wallpaper** — same visual-identity system homelab-bootstrap uses
+  on the Linux boxes (dev-1 shows "DEV", homeassistant-1 shows "HA"), so this
+  laptop shows **"PROXY"** with hostname/role/Tailscale-IP underneath. It's
+  not a separate image: `setup.ps1` clones `homelab-bootstrap` (private,
+  same `gh auth login` as controls-field-tools) and renders
+  `dotfiles/wallpapers/workstation.html` with headless Chrome — the *exact*
+  template and query-string contract (`?label=&host=&tag=&ip=`) the Linux
+  side uses, just applied with a Windows-native step (registry + `RUNDLL32`)
+  instead of XFCE's `xfconf-query`. One template, two OS-specific appliers —
+  see `homelab-bootstrap/docs/DIVERGENCE.md` #16 for why they're split that
+  way instead of unified into one script.
+
+**For a second property, site, or client setup:** edit `$IdentityTag` near
+the top of `setup.ps1` (defaults to `"remote workstation"`) before running —
+e.g. `"remote workstation - Ivy House"`. That's the whole change; nothing
+else in the pipeline is specific to this one laptop or property. The Linux
+side has the equivalent override (`IDENTITY_TAG` in homelab-bootstrap's
+`lib/xfce.sh`), added the same day for the same reason: this is meant to
+scale to more properties, and eventually other people's setups, without
+rewriting the pipeline each time.
+
 ## Definition of done
 
 - [ ] Windows 11 Pro licensed and activated on proxy laptop (`setup.ps1`'s edition check prints "OK" at the top of its run)
-- [ ] `setup.ps1` run successfully — winget apps installed, controls-field-tools cloned
+- [ ] `setup.ps1` run successfully — winget apps installed, controls-field-tools + homelab-bootstrap cloned
 - [ ] Tailscale signed in on proxy laptop + all 4 targets, MagicDNS on
 - [ ] mRemoteNG has 4 working saved connections, tested end to end
 - [ ] Bitwarden vault accessible from proxy laptop
-- [ ] `gh auth login` done, controls-field-tools clone succeeds
+- [ ] `gh auth login` done, both private-repo clones succeed
+- [ ] Dark mode applied; identity wallpaper shows PROXY + hostname/IP
 - [ ] IP Speed Dial launches elevated and can apply a site IP
 - [ ] Ubuntu lock-screen extension installed on both servers, verified session survives a lock
 - [ ] IT/security check done on corporate laptop before installing anything there
 - [ ] Niagara Workbench / Metasys SCT confirmed and installed manually (separate licensing track)
 
 ## Changelog
+
+### 2026-09-25 (4)
+- Added dark mode (system + app theme via registry) and an identity
+  wallpaper ("PROXY" + hostname/tag/IP), both Brendan preferences flagged
+  after the app-list fix. The wallpaper reuses homelab-bootstrap's existing
+  template/render pipeline (`dotfiles/wallpapers/workstation.html`, new in
+  homelab-bootstrap PR #8) rather than a separate Windows-only image, so the
+  visual-identity system stays one source of truth across Linux and Windows
+  boxes. `setup.ps1` now also clones `homelab-bootstrap` alongside
+  `controls-field-tools`.
+- Added `$IdentityTag` as an explicit, documented override point — Brendan's
+  ask to keep this modular for future properties/sites (and eventually other
+  people's setups) rather than hardcoding "remote workstation" for this one
+  laptop.
 
 ### 2026-09-25 (3)
 - Added Claude desktop (`Anthropic.Claude`) — missing from the original app

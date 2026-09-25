@@ -8,8 +8,11 @@
 # What this does:
 #   1. Installs every winget-available app in one pass (general remote-access
 #      stack + controls field tools' runtime dependencies).
-#   2. Clones/updates the controls-field-tools repo (private; needs GitHub auth).
-#   3. Prints the manual steps that can't be scripted (sign-ins, vendor-gated
+#   2. Clones/updates controls-field-tools and homelab-bootstrap (both
+#      private repos; needs GitHub auth).
+#   3. Sets dark mode and this machine's identity wallpaper -- see
+#      $IdentityTag below to customize for a second property/site.
+#   4. Prints the manual steps that can't be scripted (sign-ins, vendor-gated
 #      software, per-machine config).
 #
 # Vendor-gated tools this script deliberately does NOT install:
@@ -59,30 +62,96 @@ foreach ($app in $apps) {
     winget install --id $app --silent --accept-package-agreements --accept-source-agreements
 }
 
-Write-Host "`n--- controls-field-tools ---" -ForegroundColor Yellow
-$toolsDir = Join-Path $env:USERPROFILE "controls-field-tools"
-$ghOk = Get-Command gh -ErrorAction SilentlyContinue
-if (-not $ghOk) {
-    Write-Host "gh isn't on PATH yet (fresh install needs a new shell). Re-run setup.ps1 in a new PowerShell window to pick up the clone step." -ForegroundColor DarkYellow
+# ---- clone/pull a private repo, skipping cleanly if gh isn't ready yet ----
+function Sync-PrivateRepo {
+    param([string]$Repo, [string]$Dir)
+    $name = $Repo.Split('/')[-1]
+    Write-Host "`n--- $name ---" -ForegroundColor Yellow
+    $ghOk = Get-Command gh -ErrorAction SilentlyContinue
+    if (-not $ghOk) {
+        Write-Host "gh isn't on PATH yet (fresh install needs a new shell). Re-run setup.ps1 in a new PowerShell window to pick up the clone step." -ForegroundColor DarkYellow
+        return $false
+    }
+    if (Test-Path $Dir) {
+        Write-Host "$name already present at $Dir -- pulling latest." -ForegroundColor Cyan
+        git -C $Dir pull
+        return $true
+    }
+    gh auth status 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Not signed into GitHub yet. Run 'gh auth login' (opens a browser for SSO), then re-run setup.ps1 to clone $name." -ForegroundColor DarkYellow
+        return $false
+    }
+    gh repo clone $Repo $Dir
+    return $?
 }
-elseif (Test-Path $toolsDir) {
-    Write-Host "controls-field-tools already present at $toolsDir -- pulling latest." -ForegroundColor Cyan
-    git -C $toolsDir pull
+
+$toolsDir = Join-Path $env:USERPROFILE "controls-field-tools"
+Sync-PrivateRepo -Repo "BrendanJackson/controls-field-tools" -Dir $toolsDir | Out-Null
+
+$hbDir = Join-Path $env:USERPROFILE "homelab-bootstrap"
+$hbReady = Sync-PrivateRepo -Repo "BrendanJackson/homelab-bootstrap" -Dir $hbDir
+
+# ---- dark mode ----
+# Preference, applies system + app theme. Doesn't need a restart.
+Write-Host "`n--- dark mode ---" -ForegroundColor Yellow
+$personalizeKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'
+New-Item -Path $personalizeKey -Force | Out-Null
+Set-ItemProperty -Path $personalizeKey -Name AppsUseLightTheme -Value 0 -Type DWord
+Set-ItemProperty -Path $personalizeKey -Name SystemUsesLightTheme -Value 0 -Type DWord
+Write-Host "Dark mode set (apps + system)." -ForegroundColor Green
+
+# ---- identity wallpaper ----
+# Reuses the exact template + headless-Chrome render pipeline homelab-bootstrap
+# uses for the Linux boxes (dotfiles/wallpapers/<theme>.html, same
+# label/host/tag/ip query-string contract) -- one shared source of truth, two
+# OS-native apply steps. See homelab-bootstrap/docs/DIVERGENCE.md #16.
+#
+# $IdentityTag: edit this for a second property/site, e.g. "remote workstation - Ivy House".
+# Mirrors the IDENTITY_TAG override in homelab-bootstrap's lib/xfce.sh.
+$IdentityTag = "remote workstation"
+Write-Host "`n--- identity wallpaper ---" -ForegroundColor Yellow
+if (-not $hbReady) {
+    Write-Host "Skipped -- homelab-bootstrap isn't cloned yet (see above). Re-run setup.ps1 once it is." -ForegroundColor DarkYellow
 }
 else {
-    $authed = gh auth status 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Not signed into GitHub yet. Run 'gh auth login' (opens a browser for SSO), then re-run setup.ps1 to clone controls-field-tools." -ForegroundColor DarkYellow
+    $theme = Join-Path $hbDir "dotfiles\wallpapers\workstation.html"
+    $chrome = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe"
+    if (-not (Test-Path $chrome)) { $chrome = "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe" }
+    if (-not (Test-Path $theme)) {
+        Write-Host "Skipped -- $theme not found (homelab-bootstrap clone may be stale; try 'git -C $hbDir pull')." -ForegroundColor DarkYellow
+    }
+    elseif (-not (Test-Path $chrome)) {
+        Write-Host "Skipped -- Chrome not found at the expected winget install path yet. Re-run setup.ps1 in a new PowerShell window." -ForegroundColor DarkYellow
     }
     else {
-        gh repo clone BrendanJackson/controls-field-tools $toolsDir
+        $wallDir = Join-Path $env:USERPROFILE "Pictures\wallpapers"
+        New-Item -ItemType Directory -Path $wallDir -Force | Out-Null
+        $out = Join-Path $wallDir "$env:COMPUTERNAME.png"
+        $tsIp = ""
+        $ts = Get-Command tailscale -ErrorAction SilentlyContinue
+        if ($ts) { $tsIp = (& tailscale ip -4 2>$null | Select-Object -First 1) }
+        $url = "file:///$($theme -replace '\\','/')?label=PROXY&host=$env:COMPUTERNAME&tag=$([uri]::EscapeDataString($IdentityTag))&ip=$tsIp"
+        & $chrome --headless=new --no-sandbox --disable-gpu --hide-scrollbars --force-device-scale-factor=1 `
+            --window-size=1920,1080 --virtual-time-budget=8000 --screenshot="$out" "$url" 2>$null
+        if (Test-Path $out) {
+            Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name Wallpaper -Value $out
+            Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name WallpaperStyle -Value 10   # fill
+            Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name TileWallpaper -Value 0
+            RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
+            Write-Host "Identity wallpaper set: $out" -ForegroundColor Green
+            if (-not $tsIp) { Write-Host "(Tailscale IP blank -- sign in and re-run setup.ps1 to fill it in.)" -ForegroundColor DarkYellow }
+        }
+        else {
+            Write-Host "WARNING: Chrome produced no image -- wallpaper not set. Cosmetic only, rest of setup is unaffected." -ForegroundColor DarkYellow
+        }
     }
 }
 
 Write-Host "`nDone with winget batch. Manual steps still required:" -ForegroundColor Green
 Write-Host "1. Sign into Tailscale (opens browser SSO)."
 Write-Host "2. Sign into Bitwarden, unlock vault."
-Write-Host "3. Run 'gh auth login' if the controls-field-tools clone above was skipped, then re-run this script."
+Write-Host "3. Run 'gh auth login' if the controls-field-tools/homelab-bootstrap clones above were skipped, then re-run this script."
 Write-Host "4. Confirm controls-specific tools below (Niagara Workbench / Metasys SCT are vendor-gated, not winget-installable)."
 Write-Host "5. Set Power Plan to 'never sleep' if this machine will also host RDP inbound."
 Write-Host "6. In controls-field-tools\speed-dial: right-click Run-IP-SpeedDial.bat -> Run JCI Elevated (or Run as Administrator if that menu item isn't present on this laptop)."
