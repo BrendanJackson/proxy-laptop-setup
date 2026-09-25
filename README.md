@@ -153,6 +153,8 @@ scripted — they're printed at the end of the run, and repeated here:
 | PuTTY | SSH fallback for anything mRemoteNG doesn't cover cleanly. |
 | **GitHub CLI (`gh`)** | *Added for controls-field-tools.* It's a **private** repo — `gh auth login` is the one clean way to authenticate `git clone`/`pull` against it without hand-rolling a PAT. |
 | **Python 3.12** | *Added for controls-field-tools.* `site-audit/bas_diff.py` and `site_tool.py` are stdlib-only Python — no interpreter was in the original app list, so the tool would clone fine and then not run. |
+| **Claude (desktop app)** | *Added 2026-09-25.* Was missing from the original list — no functional dependency on it, just an oversight worth fixing since it's part of how this whole workflow is run day to day. |
+| **Windows Terminal** | *Added 2026-09-25.* This laptop now runs PowerShell, Git Bash, and Python CLI tools regularly (setup.ps1 itself, controls-field-tools, general dev use) — a real multi-tab terminal beats juggling separate console windows for that. |
 
 **Deliberately left out:** a general IP/subnet scanner. Wireshark's ARP
 traffic plus IP Speed Dial's own ping+ARP scan and JCI engine discovery
@@ -237,6 +239,14 @@ apply here.
 - [ ] Niagara Workbench / Metasys SCT confirmed and installed manually (separate licensing track)
 
 ## Changelog
+
+### 2026-09-25 (3)
+- Added Claude desktop (`Anthropic.Claude`) — missing from the original app
+  list, flagged by Brendan after the first real run.
+- Added Windows Terminal (`Microsoft.WindowsTerminal`) — proactive addition,
+  not requested, easy to drop if unwanted: this laptop runs enough
+  PowerShell/Git Bash/Python CLI work now that a real multi-tab terminal is
+  worth the one extra winget line.
 
 ### 2026-09-25 (2)
 - Made this repo **public**. The `irm | iex` one-liner below 404'd on the

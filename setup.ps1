@@ -46,8 +46,10 @@ $apps = @(
     "Google.Chrome",
     "WiresharkFoundation.Wireshark",
     "PuTTY.PuTTY",
-    "GitHub.cli",             # gh: auths git against the private controls-field-tools repo
-    "Python.Python.3.12"      # controls-field-tools/site-audit needs a Python 3 interpreter (stdlib only, no pip)
+    "GitHub.cli",              # gh: auths git against the private controls-field-tools repo
+    "Python.Python.3.12",      # controls-field-tools/site-audit needs a Python 3 interpreter (stdlib only, no pip)
+    "Anthropic.Claude",        # Claude desktop app -- was missing from the original list, added 2026-09-25
+    "Microsoft.WindowsTerminal" # multi-tab terminal for the PowerShell/Git Bash/Python CLI work this laptop now does
 )
 
 Write-Host "Installing $($apps.Count) apps via winget..." -ForegroundColor Cyan
