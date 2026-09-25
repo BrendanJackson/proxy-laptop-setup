@@ -134,9 +134,9 @@ scripted — they're printed at the end of the run, and repeated here:
 5. If this laptop will also accept **inbound** RDP (not just originate
    outbound sessions to the other 4 machines), set its Power Plan to never
    sleep.
-6. In `controls-field-tools\speed-dial`, right-click `Run-IP-SpeedDial.bat` →
-   **Run JCI Elevated** (or plain "Run as Administrator" — see below, this
-   laptop likely won't have the JCI-specific menu item).
+6. Use the **"IP Speed Dial (Admin)"** desktop shortcut `setup.ps1` creates —
+   double-click elevates automatically (see below). If it's missing, right-click
+   `controls-field-tools\speed-dial\Run-IP-SpeedDial.bat` → Run as Administrator.
 
 ## What gets installed, and why
 
@@ -168,11 +168,14 @@ Cloned by `setup.ps1` to `%USERPROFILE%\controls-field-tools` — private repo,
 
 - **IP Speed Dial** (`speed-dial/`) — one-click static-IP switching between
   sites, ping+ARP subnet scan, JCI engine discovery. PowerShell, no extra
-  runtime needed (Windows 10/11 ships PowerShell 5.1+). Right-click
-  `Run-IP-SpeedDial.bat` → **Run JCI Elevated** if that context-menu item is
-  present (it's provisioned on JCI-managed corporate laptops); otherwise a
-  plain double-click + **Yes** at the UAC prompt works identically as long as
-  the account has local admin, which this laptop's account does.
+  runtime needed (Windows 10/11 ships PowerShell 5.1+). Needs admin to change
+  the adapter IP. `setup.ps1` creates an **"IP Speed Dial (Admin)"** desktop
+  shortcut with the "run as administrator" flag pre-set, so a plain
+  double-click elevates — no right-click menu needed. (The README's "Run JCI
+  Elevated" context-menu item is provisioned by JCI's own MDM and won't exist
+  on this laptop; the shortcut is the personal-laptop equivalent.) Windows
+  still shows the UAC consent prompt once per launch — that's a security
+  boundary, not a step this shortcut tries to skip.
 - **bas-diff** (`site-audit/`) — compares a before/after BAS capture and
   writes the visit closeout email. Pure Python stdlib, no network client at
   all, read-only, no install step beyond having Python on the machine.
@@ -261,12 +264,19 @@ rewriting the pipeline each time.
 - [ ] Bitwarden vault accessible from proxy laptop
 - [ ] `gh auth login` done, both private-repo clones succeed
 - [ ] Dark mode applied; identity wallpaper shows PROXY + hostname/IP
-- [ ] IP Speed Dial launches elevated and can apply a site IP
+- [ ] "IP Speed Dial (Admin)" desktop shortcut exists and launches elevated with no right-click needed
 - [ ] Ubuntu lock-screen extension installed on both servers, verified session survives a lock
 - [ ] IT/security check done on corporate laptop before installing anything there
 - [ ] Niagara Workbench / Metasys SCT confirmed and installed manually (separate licensing track)
 
 ## Changelog
+
+### 2026-09-25 (5)
+- Added an auto-elevated desktop shortcut for IP Speed Dial (Brendan asked
+  how to make "run as administrator" the default click, the way "Run JCI
+  Elevated" is on JCI-managed laptops). Sets the standard `.lnk`
+  "run as administrator" flag — still shows the UAC prompt each launch,
+  doesn't touch UAC policy or disable the prompt.
 
 ### 2026-09-25 (4)
 - Added dark mode (system + app theme via registry) and an identity

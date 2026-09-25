@@ -148,10 +148,41 @@ else {
     }
 }
 
+# ---- elevated shortcut for IP Speed Dial ----
+# IP Speed Dial needs admin to change the adapter IP. The README's "Run JCI
+# Elevated" context-menu item is provisioned by JCI's own MDM and won't exist
+# on this laptop, so the manual fallback is right-click -> Run as
+# Administrator every time. This creates a desktop shortcut with the "Run as
+# administrator" flag already set on it, so a plain double-click elevates --
+# the personal-laptop equivalent of "Run JCI Elevated". Windows still shows
+# the UAC consent prompt each launch; that's by design and this doesn't try
+# to suppress it -- it only removes the right-click step.
+Write-Host "`n--- elevated shortcut (IP Speed Dial) ---" -ForegroundColor Yellow
+$speedDialBat = Join-Path $toolsDir "speed-dial\Run-IP-SpeedDial.bat"
+if (-not (Test-Path $speedDialBat)) {
+    Write-Host "Skipped -- $speedDialBat not found (controls-field-tools not cloned yet)." -ForegroundColor DarkYellow
+}
+else {
+    $lnkPath = Join-Path ([Environment]::GetFolderPath("Desktop")) "IP Speed Dial (Admin).lnk"
+    $wsh = New-Object -ComObject WScript.Shell
+    $shortcut = $wsh.CreateShortcut($lnkPath)
+    $shortcut.TargetPath = $speedDialBat
+    $shortcut.WorkingDirectory = Split-Path $speedDialBat -Parent
+    $shortcut.Description = "IP Speed Dial, pre-elevated (double-click, no right-click needed)"
+    $shortcut.Save()
+    # .lnk byte 0x15 bit 0x20 is the "run as administrator" flag -- not exposed
+    # by the WScript.Shell COM object, so it's set directly on the saved file.
+    # Standard, widely-used technique; does not touch UAC or any system policy.
+    $bytes = [System.IO.File]::ReadAllBytes($lnkPath)
+    $bytes[0x15] = $bytes[0x15] -bor 0x20
+    [System.IO.File]::WriteAllBytes($lnkPath, $bytes)
+    Write-Host "Desktop shortcut created: 'IP Speed Dial (Admin)' -- double-click elevates (UAC prompt still appears once per launch)." -ForegroundColor Green
+}
+
 Write-Host "`nDone with winget batch. Manual steps still required:" -ForegroundColor Green
 Write-Host "1. Sign into Tailscale (opens browser SSO)."
 Write-Host "2. Sign into Bitwarden, unlock vault."
 Write-Host "3. Run 'gh auth login' if the controls-field-tools/homelab-bootstrap clones above were skipped, then re-run this script."
 Write-Host "4. Confirm controls-specific tools below (Niagara Workbench / Metasys SCT are vendor-gated, not winget-installable)."
 Write-Host "5. Set Power Plan to 'never sleep' if this machine will also host RDP inbound."
-Write-Host "6. In controls-field-tools\speed-dial: right-click Run-IP-SpeedDial.bat -> Run JCI Elevated (or Run as Administrator if that menu item isn't present on this laptop)."
+Write-Host "6. Use the 'IP Speed Dial (Admin)' desktop shortcut (or right-click Run-IP-SpeedDial.bat -> Run as Administrator)."
