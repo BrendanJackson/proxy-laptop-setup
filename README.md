@@ -11,6 +11,12 @@ per-machine (Windows/Ubuntu/corporate-laptop) setup steps, lives in Notion:
 page's install script had nowhere to be cloned from — that was the one open
 item blocking a real one-click install, and this repo closes it.
 
+**This repo is public** (made public 2026-09-25, so the one-liner below works
+with zero GitHub auth on a bare machine). It contains only the app list and
+setup instructions — no secrets, no customer data. `controls-field-tools`
+(the actual field tools this installs) is a separate, private repo and is
+unaffected.
+
 ## Before you touch the laptop: Windows 11 Pro
 
 This is a **reimage of a used laptop**, not an upgrade — there's no existing
@@ -60,10 +66,11 @@ Open PowerShell **as Administrator** (right-click the Start button →
 Set-ExecutionPolicy Bypass -Scope Process -Force; iex (irm https://raw.githubusercontent.com/BrendanJackson/proxy-laptop-setup/master/setup.ps1)
 ```
 
-This is the one-click install — nothing to download, unzip, or unblock
-first. It works on a completely bare machine, before `git` even exists,
-because `iex` runs the script directly from memory rather than as a file on
-disk, so none of the local-file restrictions below ever come into play.
+This is the one-click install — nothing to download, unzip, unblock, or sign
+into GitHub first. It works on a completely bare machine, before `git` even
+exists, because `iex` runs the script directly from memory rather than as a
+file on disk, so none of the local-file restrictions below ever come into
+play (and because the repo is public, so `irm` needs no auth token to fetch it).
 
 <details>
 <summary>Why not just `git clone` + `.\setup.ps1`? (click to expand)</summary>
@@ -230,6 +237,14 @@ apply here.
 - [ ] Niagara Workbench / Metasys SCT confirmed and installed manually (separate licensing track)
 
 ## Changelog
+
+### 2026-09-25 (2)
+- Made this repo **public**. The `irm | iex` one-liner below 404'd on the
+  first real attempt to use it — `raw.githubusercontent.com` refuses
+  unauthenticated requests for private-repo content regardless of path, and
+  the whole point of the one-liner is zero prerequisites, so embedding a
+  token wasn't the right fix. Audited contents first: no secrets, no
+  customer data, just the app list and setup instructions.
 
 ### 2026-09-25
 - Fixed a real install failure on the first machine this ran on: the
