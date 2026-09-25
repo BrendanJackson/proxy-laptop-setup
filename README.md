@@ -154,6 +154,7 @@ scripted — they're printed at the end of the run, and repeated here:
 | **GitHub CLI (`gh`)** | *Added for controls-field-tools.* It's a **private** repo — `gh auth login` is the one clean way to authenticate `git clone`/`pull` against it without hand-rolling a PAT. |
 | **Python 3.12** | *Added for controls-field-tools.* `site-audit/bas_diff.py` and `site_tool.py` are stdlib-only Python — no interpreter was in the original app list, so the tool would clone fine and then not run. |
 | **Claude (desktop app)** | *Added 2026-09-25.* Was missing from the original list — no functional dependency on it, just an oversight worth fixing since it's part of how this whole workflow is run day to day. |
+| **Claude Code (CLI)** | *Added 2026-09-25.* Also missing, flagged separately from the desktop app — lets this laptop drive Claude Code sessions directly rather than only through the desktop app or a browser. |
 | **Windows Terminal** | *Added 2026-09-25.* This laptop now runs PowerShell, Git Bash, and Python CLI tools regularly (setup.ps1 itself, controls-field-tools, general dev use) — a real multi-tab terminal beats juggling separate console windows for that. |
 
 **Deliberately left out:** a general IP/subnet scanner. Wireshark's ARP
@@ -255,6 +256,25 @@ side has the equivalent override (`IDENTITY_TAG` in homelab-bootstrap's
 scale to more properties, and eventually other people's setups, without
 rewriting the pipeline each time.
 
+## Troubleshooting
+
+**Screen upside down / rotated after sleep or restart, and Ctrl+Alt+Up
+(or any Ctrl+Alt+Arrow) doesn't fix it:**
+
+```powershell
+git pull
+.\Fix-ScreenRotation.ps1
+```
+
+Run from inside the cloned repo folder. No admin needed. This calls the same
+Win32 display API Windows itself uses to rotate the screen
+(`ChangeDisplaySettingsEx`), so it works even when the Ctrl+Alt+Arrow hotkey
+handler is disabled or unresponsive — it doesn't depend on that hotkey at
+all. If a display is still rotated afterward, the graphics driver may be
+reasserting its own rotation on top of this; the script prints two manual
+fallbacks (driver's own rotation menu, or Settings > System > Display) at
+the end if that happens.
+
 ## Definition of done
 
 - [ ] Windows 11 Pro licensed and activated on proxy laptop (`setup.ps1`'s edition check prints "OK" at the top of its run)
@@ -270,6 +290,15 @@ rewriting the pipeline each time.
 - [ ] Niagara Workbench / Metasys SCT confirmed and installed manually (separate licensing track)
 
 ## Changelog
+
+### 2026-09-25 (6)
+- Added Claude Code CLI (`Anthropic.ClaudeCode`) — Brendan flagged it was
+  missing, separately from the desktop app (which was already added earlier
+  the same day).
+- Added `Fix-ScreenRotation.ps1` — a standalone script for a display stuck
+  rotated after sleep/restart when Ctrl+Alt+Up doesn't fix it. Uses
+  `ChangeDisplaySettingsEx` directly (the actual API behind the hotkey)
+  instead of depending on the hotkey handler.
 
 ### 2026-09-25 (5)
 - Added an auto-elevated desktop shortcut for IP Speed Dial (Brendan asked
