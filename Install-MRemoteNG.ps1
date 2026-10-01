@@ -1,23 +1,35 @@
-# Install-MRemoteNG.ps1 -- mRemoteNG plus a ready-made connection list for
-# every machine on the tailnet, on any Windows box (proxy laptop, the Windows
-# desktop, a future one). Run in PowerShell as Administrator:
+# Install-MRemoteNG.ps1 -- one command to get a brand-new Windows box talking
+# to the whole tailnet: Tailscale, mRemoteNG, and a ready-made connection list
+# for every machine in $Machines below. Works on a machine that has none of
+# this yet (proxy laptop, the Windows desktop, the JCI laptop, a future one),
+# and is safe to re-run on one that already has some or all of it. Run in
+# PowerShell as Administrator:
 #
 #   Set-ExecutionPolicy Bypass -Scope Process -Force; iex (irm https://raw.githubusercontent.com/BrendanJackson/proxy-laptop-setup/master/Install-MRemoteNG.ps1)
 #
 # setup.ps1 runs this too, so the proxy laptop gets it on a normal setup.
 #
 # What it does (TSK-173, 2026-10-01):
-#   1. winget-installs mRemoteNG (no-op if already present).
-#   2. Writes a connections file holding a "Homelab" folder with an RDP and/or
+#   1. winget-installs Tailscale (no-op if already present), refreshes PATH in
+#      this process so a just-installed tailscale.exe is usable without a new
+#      shell, then checks sign-in state and runs `tailscale up` (interactive
+#      browser SSO) only if not already signed in and online.
+#   2. winget-installs mRemoteNG (no-op if already present).
+#   3. Writes a connections file holding a "Homelab" folder with an RDP and/or
 #      SSH entry for every machine in $Machines below, addressed by Tailscale
 #      MagicDNS name. No passwords are written -- mRemoteNG prompts the first
 #      time and can save them once a master password is set on the file.
-#   3. Never overwrites an existing confCons.xml. If one is there (it is, on
+#   4. Never overwrites an existing confCons.xml. If one is there (it is, on
 #      the proxy laptop: mRemoteNG has been used by hand since 09/25), the list
 #      is written beside it as homelab-connections.xml and the import step is
 #      printed. -Replace overwrites after taking a dated backup.
-#   4. Probes every host:port in the list and prints open/closed, so "ready to
+#   5. Probes every host:port in the list and prints open/closed, so "ready to
 #      connect" is observed, not assumed.
+#
+# -SkipInstall skips steps 1-2 (Tailscale + mRemoteNG installs and the
+# Tailscale sign-in prompt) and only writes the connections file + probes --
+# use it on a machine that's already fully bootstrapped and you just want a
+# fresh connections file.
 #
 # To add a machine or a second property: add a row to $Machines. Nothing else
 # changes. $TailnetSuffix is the one per-tailnet value (mirrors $IdentityTag in
@@ -38,7 +50,7 @@
 [CmdletBinding()]
 param(
     [switch]$Replace,      # overwrite an existing confCons.xml (backup taken first)
-    [switch]$SkipInstall,  # only write the connections file + probe
+    [switch]$SkipInstall,  # skip Tailscale + mRemoteNG installs and the Tailscale sign-in prompt; only write the connections file + probe
     [switch]$SkipProbe     # skip the host:port reachability table
 )
 
@@ -56,7 +68,7 @@ $Machines = @(
     @{ Name = "dev-1";           Host = "dev-1";           Descr = "Ubuntu automation box (XFCE over xrdp; Claude Code sessions live here)"; Protocols = @("RDP", "SSH"); User = "master" },
     @{ Name = "homeassistant-1"; Host = "homeassistant-1"; Descr = "Ubuntu Home Assistant box (OptiPlex #1, xrdp)";                           Protocols = @("RDP", "SSH"); User = "master" },
     @{ Name = "Windows desktop"; Host = "desktop-4539ppg"; Descr = "Windows desktop, 8TB backup target. Enable Remote Desktop on it first (runbook section 5)."; Protocols = @("RDP", "SSH"); User = "" },
-    @{ Name = "JCI laptop";      Host = "ma-5p23zb4";      Descr = "Corporate Metasys laptop, MDM-managed. Ask IT before relying on this; Tailscale may not be allowed."; Protocols = @("RDP"); User = "" },
+    @{ Name = "JCI laptop";      Host = "ma-5p23zb4";      Descr = "Corporate Metasys laptop, MDM-managed.";                                   Protocols = @("RDP"); User = "" },
     @{ Name = "Proxy laptop";    Host = "proxy";           Descr = "This proxy laptop itself, for use from the desktop";                       Protocols = @("RDP"); User = "" }
 )
 # Deliberately not listed: greystar-m16-bench. It is a customer's Metasys
@@ -64,8 +76,32 @@ $Machines = @(
 
 # ---- 1. install ----------------------------------------------------------------
 if (-not $SkipInstall) {
+    Write-Host "`n--- Tailscale.Tailscale ---" -ForegroundColor Yellow
+    winget install --id Tailscale.Tailscale --silent --accept-package-agreements --accept-source-agreements
+
     Write-Host "`n--- mRemoteNG.mRemoteNG ---" -ForegroundColor Yellow
     winget install --id mRemoteNG.mRemoteNG --silent --accept-package-agreements --accept-source-agreements
+
+    # refresh PATH in this process so tailscale.exe (just installed, maybe for
+    # the first time) is usable below without opening a new PowerShell window
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
+                [System.Environment]::GetEnvironmentVariable("Path", "User")
+
+    $tailscale = Get-Command tailscale -ErrorAction SilentlyContinue
+    if (-not $tailscale) {
+        Write-Host "tailscale.exe still not on PATH -- open a new PowerShell window and re-run this script to pick up sign-in and the reachability probe." -ForegroundColor DarkYellow
+    }
+    else {
+        Write-Host "`n--- tailscale sign-in ---" -ForegroundColor Yellow
+        $status = & tailscale status --json 2>$null | ConvertFrom-Json
+        if ($status -and $status.Self -and $status.Self.Online) {
+            Write-Host "Already signed in and online as $($status.Self.HostName)." -ForegroundColor Green
+        }
+        else {
+            Write-Host "Opening the browser for SSO sign-in -- approve the device, then this script continues." -ForegroundColor Cyan
+            & tailscale up
+        }
+    }
 }
 
 # ---- 2. build the connections file ---------------------------------------------
