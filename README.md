@@ -174,16 +174,23 @@ every machine on the tailnet, addressed by Tailscale MagicDNS name, then
 probes each one and prints open/closed so "ready to connect" is something you
 can see.
 
-Run it on its own on **any Windows box** (the proxy laptop, the Windows
-desktop, the JCI laptop, a future one) in PowerShell as Administrator:
+Run it on its own on **any Windows box that should join the tailnet** (the
+proxy laptop, the Windows desktop, a future one) in PowerShell as
+Administrator:
 
 ```powershell
 Set-ExecutionPolicy Bypass -Scope Process -Force; iex (irm https://raw.githubusercontent.com/BrendanJackson/proxy-laptop-setup/master/Install-MRemoteNG.ps1)
 ```
 
-This is the one-liner for onboarding **any future machine** too — nothing
-about it is specific to the four below. Add a row to `$Machines` in the
-script for the new box, then run this same command on it.
+This is the one-liner for onboarding **any future tailnet machine** too —
+nothing about it is specific to the four below. Add a row to `$Machines` in
+the script for the new box, then run this same command on it.
+
+**Exception: the JCI laptop deliberately does not run this.** It's
+MDM-managed and is being kept off Tailscale, so it only needs Remote Desktop
+enabled locally (`$Machines` addresses it by plain hostname instead of a
+Tailscale FQDN — see `Tailnet = $false` in the script). It's only reachable
+from here when both machines are on the same local network.
 
 What it writes:
 
@@ -192,7 +199,7 @@ What it writes:
 | dev-1 (RDP), dev-1 (SSH) | `dev-1.tail018f42.ts.net` | Ubuntu automation box; xrdp and SSH both verified open 2026-10-01 |
 | homeassistant-1 (RDP), (SSH) | `homeassistant-1.tail018f42.ts.net` | Ubuntu Home Assistant box; both verified open 2026-10-01 |
 | Windows desktop (RDP), (SSH) | `desktop-4539ppg.tail018f42.ts.net` | 8TB backup target. SSH was open, **RDP was not reachable** from dev-1 on 2026-10-01: enable Remote Desktop on it (runbook section 5) |
-| JCI laptop (RDP) | `ma-5p23zb4.tail018f42.ts.net` | Corporate Metasys laptop, MDM-managed; offline 18 days at the time of writing. Run the one-liner above directly on it to bring it onto the tailnet |
+| JCI laptop (RDP) | `ma-5p23zb4` (no Tailscale -- plain local hostname) | Corporate Metasys laptop, MDM-managed. Deliberately kept off Tailscale; only reachable when this box is on the same local network. Enable Remote Desktop on it directly (same fDenyTSConnections/firewall fix as the Windows desktop) |
 | Proxy laptop (RDP) | `proxy.tail018f42.ts.net` | This laptop, for use from the desktop |
 
 Not listed on purpose: `greystar-m16-bench`, a customer's Metasys server
