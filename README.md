@@ -213,8 +213,12 @@ a brand-new unprotected file is in (the app's own check,
 `ConnectionsFileIsAuthentic`, accepts exactly that). It was precomputed on
 dev-1 with the app's KDF and cipher because Windows PowerShell 5.1 has no
 AES-GCM. The generated XML parses and the probe table was exercised with
-PowerShell 7 on dev-1; **it has not yet been opened by mRemoteNG on a real
-Windows machine**. The check that settles it: run the one-liner on the proxy
+PowerShell 7 on dev-1. **The first real import on the proxy laptop (2026-10-01
+09:54 local) failed** with "An error occurred while importing the file": the
+file carried only the attributes that matter, and the importer reads every
+attribute a real file has with no null check. Fixed the same morning by
+writing the full attribute set with the app's own defaults; the second import
+is the check that settles it. Run the script with mRemoteNG closed. The check that settles it: run the one-liner on the proxy
 laptop, open mRemoteNG, see the Homelab folder with 8 entries and no "wrong
 password" or file-format error. If that fails, the printed table is enough to
 add the entries by hand, and the task row (TSK-173) is where to record it.
@@ -347,6 +351,14 @@ the end if that happens.
 - [ ] Niagara Workbench / Metasys SCT confirmed and installed manually (separate licensing track)
 
 ## Changelog
+
+### 2026-10-01 (2)
+- Fix: the generated connections file failed to import on the proxy laptop
+  ("An error occurred while importing the file"). Cause: only the useful
+  attributes were written, and mRemoteNG's importer dereferences every
+  attribute a real file carries. Now writes the complete 1.76.20 attribute
+  set (114 per node) with the app's defaults. Also: run the script with
+  mRemoteNG closed, or it saves its own copy over the new file on exit.
 
 ### 2026-10-01
 - Added `Install-MRemoteNG.ps1` (TSK-173): installs mRemoteNG and writes a

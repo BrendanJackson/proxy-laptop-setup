@@ -30,7 +30,10 @@
 # (PBKDF2-SHA1 x1000, 256-bit key, 16-byte salt + 16-byte nonce + ciphertext +
 # tag, base64) because Windows PowerShell 5.1 has no AES-GCM. The salt/nonce are
 # random, so any such value is valid; this one is fixed so the file is
-# reproducible. UNVERIFIED on a real install as of 2026-10-01 -- see README.
+# reproducible.
+#
+# RUN WITH mRemoteNG CLOSED. It writes its own copy of confCons.xml on exit and
+# would overwrite a file written underneath it.
 
 [CmdletBinding()]
 param(
