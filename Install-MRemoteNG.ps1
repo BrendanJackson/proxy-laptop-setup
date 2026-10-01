@@ -60,15 +60,20 @@ $ErrorActionPreference = "Continue"
 $TailnetSuffix = "tail018f42.ts.net"
 
 # ---- every machine, one row each --------------------------------------------
-# Host is the Tailscale machine name; the FQDN is Host + $TailnetSuffix so it
-# resolves whether or not the MagicDNS search domain is set on this box.
-# Protocols: RDP (3389) and/or SSH (22). User is pre-filled where it is known
-# and fixed (the Linux boxes); blank means mRemoteNG asks.
+# Host is the machine name; the FQDN is Host + $TailnetSuffix so it resolves
+# whether or not the MagicDNS search domain is set on this box. Protocols: RDP
+# (3389) and/or SSH (22). User is pre-filled where it is known and fixed (the
+# Linux boxes); blank means mRemoteNG asks.
+#
+# Tailnet = $false (JCI laptop): no Tailscale there by design (MDM-managed,
+# kept off it deliberately) -- Host is used as-is, resolved via local/corporate
+# DNS instead of a MagicDNS FQDN. Only reachable when this box is on the same
+# network as it.
 $Machines = @(
     @{ Name = "dev-1";           Host = "dev-1";           Descr = "Ubuntu automation box (XFCE over xrdp; Claude Code sessions live here)"; Protocols = @("RDP", "SSH"); User = "master" },
     @{ Name = "homeassistant-1"; Host = "homeassistant-1"; Descr = "Ubuntu Home Assistant box (OptiPlex #1, xrdp)";                           Protocols = @("RDP", "SSH"); User = "master" },
     @{ Name = "Windows desktop"; Host = "desktop-4539ppg"; Descr = "Windows desktop, 8TB backup target. Enable Remote Desktop on it first (runbook section 5)."; Protocols = @("RDP", "SSH"); User = "" },
-    @{ Name = "JCI laptop";      Host = "ma-5p23zb4";      Descr = "Corporate Metasys laptop, MDM-managed.";                                   Protocols = @("RDP"); User = "" },
+    @{ Name = "JCI laptop";      Host = "ma-5p23zb4";      Descr = "Corporate Metasys laptop, MDM-managed. No Tailscale -- reachable only on the same local network. Enable Remote Desktop on it first."; Protocols = @("RDP"); User = ""; Tailnet = $false },
     @{ Name = "Proxy laptop";    Host = "proxy";           Descr = "This proxy laptop itself, for use from the desktop";                       Protocols = @("RDP"); User = "" }
 )
 # Deliberately not listed: greystar-m16-bench. It is a customer's Metasys
@@ -162,7 +167,7 @@ $sb = New-Object System.Text.StringBuilder
 [void]$sb.AppendLine('  <Node ' + (New-NodeAttributes -Name "Homelab" -Type "Container" -Descr ("Every machine on " + $TailnetSuffix + ", written by proxy-laptop-setup/Install-MRemoteNG.ps1") -Hostname "" -Protocol "RDP" -Port 3389 -Username "") + '>')
 $probeList = @()
 foreach ($m in $Machines) {
-    $fqdn = "$($m.Host).$TailnetSuffix"
+    if ($m.ContainsKey("Tailnet") -and -not $m.Tailnet) { $fqdn = $m.Host } else { $fqdn = "$($m.Host).$TailnetSuffix" }
     foreach ($proto in $m.Protocols) {
         if ($proto -eq "RDP") { $p = "RDP";  $port = 3389 } else { $p = "SSH2"; $port = 22 }
         $name = "{0} ({1})" -f $m.Name, $proto
