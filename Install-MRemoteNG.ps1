@@ -69,8 +69,13 @@ if (-not $SkipInstall) {
 }
 
 # ---- 2. build the connections file ---------------------------------------------
-# Precomputed on dev-1 2026-10-01: AES-GCM("ThisIsNotProtected", key=PBKDF2-SHA1("mR3m", salt, 1000, 32))
-$ProtectedValue = "9Nu5PEq1e/EjoHWpJpwM94GtWlrTUdB7LNB49PUnWcDCdEtnqU5gqo9b/A4VnmV0ClQsXwKMdieeEkGOm3JCTIAA"
+# Precomputed 2026-10-01: AES-GCM("ThisIsNotProtected", key=PBKDF2-SHA1("mR3m", salt, 1000, 32)),
+# salt passed as GCM additional authenticated data (mRemoteNG authenticates the
+# Protected attribute against its own salt -- omitting this AAD step produces a
+# value that LOOKS valid but fails GCM tag verification on import, which is what
+# "An error occurred while importing the file" actually was on 2026-10-01; it was
+# not the missing-attribute issue below.
+$ProtectedValue = "+zicYQq/tdkB5vI/lCID8Vg2cGCaN08A7Qy/UJLxzxsZugYoRmNaAHluGYzE0o6Cz6zYWRmuUkELZIkPRpU5uyjJ"
 
 function Esc([string]$s) { [System.Security.SecurityElement]::Escape($s) }
 
