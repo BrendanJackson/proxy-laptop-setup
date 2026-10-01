@@ -73,27 +73,41 @@ function Esc([string]$s) { [System.Security.SecurityElement]::Escape($s) }
 
 function New-NodeAttributes {
     param([string]$Name, [string]$Type, [string]$Descr, [string]$Hostname, [string]$Protocol, [int]$Port, [string]$Username)
-    # Only the attributes that matter are set; mRemoteNG fills defaults for the rest.
+    # EVERY attribute mRemoteNG 1.76.20 writes is set here, with the app's own
+    # defaults. The importer reads each one as xmlnode.Attributes["X"].Value with
+    # no null check, so a missing attribute is a NullReferenceException and the
+    # dialog "An error occurred while importing the file" -- observed on the
+    # proxy laptop 2026-10-01 with a file that carried only the useful ones.
     $a = [ordered]@{
         Name = $Name; Type = $Type; Expanded = ($Type -eq "Container").ToString().ToLowerInvariant()
         Descr = $Descr; Icon = "mRemoteNG"; Panel = "General"; Id = [guid]::NewGuid().ToString()
         Username = $Username; Domain = ""; Password = ""
         Hostname = $Hostname; Protocol = $Protocol; PuttySession = "Default Settings"; Port = $Port
         ConnectToConsole = "false"; UseCredSsp = "true"; RenderingEngine = "IE"
-        RDPAuthenticationLevel = "NoAuth"; Colors = "Colors16Bit"; Resolution = "FitToWindow"
-        AutomaticResize = "true"; DisplayWallpaper = "false"; DisplayThemes = "false"
-        EnableFontSmoothing = "false"; EnableDesktopComposition = "false"; CacheBitmaps = "false"
+        ICAEncryptionStrength = "EncrBasic"; RDPAuthenticationLevel = "NoAuth"
+        RDPMinutesToIdleTimeout = "0"; RDPAlertIdleTimeout = "false"; LoadBalanceInfo = ""
+        Colors = "Colors16Bit"; Resolution = "FitToWindow"; AutomaticResize = "true"
+        DisplayWallpaper = "false"; DisplayThemes = "false"; EnableFontSmoothing = "false"
+        EnableDesktopComposition = "false"; CacheBitmaps = "false"
         RedirectDiskDrives = "false"; RedirectPorts = "false"; RedirectPrinters = "false"
-        RedirectSmartCards = "false"; RedirectSound = "DoNotPlay"; RedirectKeys = "false"
-        InheritCacheBitmaps = "false"; InheritColors = "false"; InheritDescription = "false"
-        InheritDisplayThemes = "false"; InheritDisplayWallpaper = "false"; InheritEnableFontSmoothing = "false"
-        InheritEnableDesktopComposition = "false"; InheritDomain = "false"; InheritIcon = "false"
-        InheritPanel = "false"; InheritPassword = "false"; InheritPort = "false"; InheritProtocol = "false"
-        InheritPuttySession = "false"; InheritRedirectDiskDrives = "false"; InheritRedirectKeys = "false"
-        InheritRedirectPorts = "false"; InheritRedirectPrinters = "false"; InheritRedirectSmartCards = "false"
-        InheritRedirectSound = "false"; InheritResolution = "false"; InheritAutomaticResize = "false"
-        InheritUseConsoleSession = "false"; InheritUseCredSsp = "false"; InheritRenderingEngine = "false"
-        InheritUsername = "false"; InheritRDPAuthenticationLevel = "false"
+        RedirectSmartCards = "false"; RedirectSound = "DoNotPlay"; SoundQuality = "Dynamic"; RedirectKeys = "false"
+        Connected = "false"; PreExtApp = ""; PostExtApp = ""; MacAddress = ""; UserField = ""; ExtApp = ""
+        VNCCompression = "CompNone"; VNCEncoding = "EncHextile"; VNCAuthMode = "AuthVNC"
+        VNCProxyType = "ProxyNone"; VNCProxyIP = ""; VNCProxyPort = "0"; VNCProxyUsername = ""; VNCProxyPassword = ""
+        VNCColors = "ColNormal"; VNCSmartSizeMode = "SmartSAspect"; VNCViewOnly = "false"
+        RDGatewayUsageMethod = "Never"; RDGatewayHostname = ""; RDGatewayUseConnectionCredentials = "Yes"
+        RDGatewayUsername = ""; RDGatewayPassword = ""; RDGatewayDomain = ""
+    }
+    foreach ($k in @("CacheBitmaps","Colors","Description","DisplayThemes","DisplayWallpaper","EnableFontSmoothing",
+        "EnableDesktopComposition","Domain","Icon","Panel","Password","Port","Protocol","PuttySession",
+        "RedirectDiskDrives","RedirectKeys","RedirectPorts","RedirectPrinters","RedirectSmartCards","RedirectSound",
+        "SoundQuality","Resolution","AutomaticResize","UseConsoleSession","UseCredSsp","RenderingEngine","Username",
+        "ICAEncryptionStrength","RDPAuthenticationLevel","RDPMinutesToIdleTimeout","RDPAlertIdleTimeout","LoadBalanceInfo",
+        "PreExtApp","PostExtApp","MacAddress","UserField","ExtApp","VNCCompression","VNCEncoding","VNCAuthMode",
+        "VNCProxyType","VNCProxyIP","VNCProxyPort","VNCProxyUsername","VNCProxyPassword","VNCColors","VNCSmartSizeMode",
+        "VNCViewOnly","RDGatewayUsageMethod","RDGatewayHostname","RDGatewayUseConnectionCredentials","RDGatewayUsername",
+        "RDGatewayPassword","RDGatewayDomain")) {
+        $a["Inherit$k"] = "false"
     }
     ($a.GetEnumerator() | ForEach-Object { '{0}="{1}"' -f $_.Key, (Esc ([string]$_.Value)) }) -join " "
 }
