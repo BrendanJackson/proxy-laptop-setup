@@ -165,18 +165,25 @@ extra footprint unless a specific gap shows up in the field.
 ## mRemoteNG connection list (every workstation, ready to connect)
 
 `setup.ps1` installs mRemoteNG but, until 2026-10-01, left it empty: every
-target was typed in by hand. `Install-MRemoteNG.ps1` fixes that. It installs
-mRemoteNG (no-op if present) and writes a **Homelab** folder with an RDP
-and/or SSH entry for every machine on the tailnet, addressed by Tailscale
-MagicDNS name, then probes each one and prints open/closed so "ready to
-connect" is something you can see.
+target was typed in by hand. `Install-MRemoteNG.ps1` fixes that, and as of
+2026-10-01 it's also the one-command path for getting a **brand-new** Windows
+box onto the tailnet at all: it installs Tailscale (no-op if present, prompts
+for SSO sign-in only if not already signed in), installs mRemoteNG (no-op if
+present), and writes a **Homelab** folder with an RDP and/or SSH entry for
+every machine on the tailnet, addressed by Tailscale MagicDNS name, then
+probes each one and prints open/closed so "ready to connect" is something you
+can see.
 
 Run it on its own on **any Windows box** (the proxy laptop, the Windows
-desktop, a future one) in PowerShell as Administrator:
+desktop, the JCI laptop, a future one) in PowerShell as Administrator:
 
 ```powershell
 Set-ExecutionPolicy Bypass -Scope Process -Force; iex (irm https://raw.githubusercontent.com/BrendanJackson/proxy-laptop-setup/master/Install-MRemoteNG.ps1)
 ```
+
+This is the one-liner for onboarding **any future machine** too — nothing
+about it is specific to the four below. Add a row to `$Machines` in the
+script for the new box, then run this same command on it.
 
 What it writes:
 
@@ -185,7 +192,7 @@ What it writes:
 | dev-1 (RDP), dev-1 (SSH) | `dev-1.tail018f42.ts.net` | Ubuntu automation box; xrdp and SSH both verified open 2026-10-01 |
 | homeassistant-1 (RDP), (SSH) | `homeassistant-1.tail018f42.ts.net` | Ubuntu Home Assistant box; both verified open 2026-10-01 |
 | Windows desktop (RDP), (SSH) | `desktop-4539ppg.tail018f42.ts.net` | 8TB backup target. SSH was open, **RDP was not reachable** from dev-1 on 2026-10-01: enable Remote Desktop on it (runbook section 5) |
-| JCI laptop (RDP) | `ma-5p23zb4.tail018f42.ts.net` | Corporate Metasys laptop, MDM-managed; offline 18 days at the time of writing. Ask IT first, per the runbook |
+| JCI laptop (RDP) | `ma-5p23zb4.tail018f42.ts.net` | Corporate Metasys laptop, MDM-managed; offline 18 days at the time of writing. Run the one-liner above directly on it to bring it onto the tailnet |
 | Proxy laptop (RDP) | `proxy.tail018f42.ts.net` | This laptop, for use from the desktop |
 
 Not listed on purpose: `greystar-m16-bench`, a customer's Metasys server
@@ -347,7 +354,6 @@ the end if that happens.
 - [ ] Dark mode applied; identity wallpaper shows PROXY + hostname/IP
 - [ ] "IP Speed Dial (Admin)" desktop shortcut exists and launches elevated with no right-click needed
 - [ ] Ubuntu lock-screen extension installed on both servers, verified session survives a lock
-- [ ] IT/security check done on corporate laptop before installing anything there
 - [ ] Niagara Workbench / Metasys SCT confirmed and installed manually (separate licensing track)
 
 ## Changelog
