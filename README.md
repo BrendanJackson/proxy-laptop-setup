@@ -192,6 +192,10 @@ enabled locally (`$Machines` addresses it by plain hostname instead of a
 Tailscale FQDN — see `Tailnet = $false` in the script). It's only reachable
 from here when both machines are on the same local network.
 
+Its IP changes per site/DHCP, so the hostname in the table below may go
+stale: run `Find-JCILaptop.ps1` on this box to resolve its current IP by ARP
+and update the connection entry automatically.
+
 What it writes:
 
 | Entry | Target | Why |

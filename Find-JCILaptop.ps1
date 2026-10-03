@@ -4,7 +4,7 @@
 # Tailnet = $false row) and its IP changes per site/DHCP. Run in PowerShell,
 # no admin needed:
 #
-#   Set-ExecutionPolicy Bypass -Scope Process -Force; iex (irm https://raw.githubusercontent.com/BrendanJackson/proxy-laptop-setup/tsk-173/mremoteng-connections/Find-JCILaptop.ps1)
+#   Set-ExecutionPolicy Bypass -Scope Process -Force; iex (irm https://raw.githubusercontent.com/BrendanJackson/proxy-laptop-setup/master/Find-JCILaptop.ps1)
 #
 # What it does (TSK-173, 2026-10-01):
 #   1. Finds this machine's local (non-Tailscale, non-APIPA) IPv4 subnets.
