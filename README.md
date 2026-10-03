@@ -162,6 +162,85 @@ traffic plus IP Speed Dial's own ping+ARP scan and JCI engine discovery
 already cover the practical need — a third overlapping tool isn't worth the
 extra footprint unless a specific gap shows up in the field.
 
+## mRemoteNG connection list (every workstation, ready to connect)
+
+`setup.ps1` installs mRemoteNG but, until 2026-10-01, left it empty: every
+target was typed in by hand. `Install-MRemoteNG.ps1` fixes that, and as of
+2026-10-01 it's also the one-command path for getting a **brand-new** Windows
+box onto the tailnet at all: it installs Tailscale (no-op if present, prompts
+for SSO sign-in only if not already signed in), installs mRemoteNG (no-op if
+present), and writes a **Homelab** folder with an RDP and/or SSH entry for
+every machine on the tailnet, addressed by Tailscale MagicDNS name, then
+probes each one and prints open/closed so "ready to connect" is something you
+can see.
+
+Run it on its own on **any Windows box that should join the tailnet** (the
+proxy laptop, the Windows desktop, a future one) in PowerShell as
+Administrator:
+
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process -Force; iex (irm https://raw.githubusercontent.com/BrendanJackson/proxy-laptop-setup/master/Install-MRemoteNG.ps1)
+```
+
+This is the one-liner for onboarding **any future tailnet machine** too —
+nothing about it is specific to the four below. Add a row to `$Machines` in
+the script for the new box, then run this same command on it.
+
+**Exception: the JCI laptop deliberately does not run this.** It's
+MDM-managed and is being kept off Tailscale, so it only needs Remote Desktop
+enabled locally (`$Machines` addresses it by plain hostname instead of a
+Tailscale FQDN — see `Tailnet = $false` in the script). It's only reachable
+from here when both machines are on the same local network.
+
+Its IP changes per site/DHCP, so the hostname in the table below may go
+stale: run `Find-JCILaptop.ps1` on this box to resolve its current IP by ARP
+and update the connection entry automatically.
+
+What it writes:
+
+| Entry | Target | Why |
+|---|---|---|
+| dev-1 (RDP), dev-1 (SSH) | `dev-1.tail018f42.ts.net` | Ubuntu automation box; xrdp and SSH both verified open 2026-10-01 |
+| homeassistant-1 (RDP), (SSH) | `homeassistant-1.tail018f42.ts.net` | Ubuntu Home Assistant box; both verified open 2026-10-01 |
+| Windows desktop (RDP), (SSH) | `desktop-4539ppg.tail018f42.ts.net` | 8TB backup target. SSH was open, **RDP was not reachable** from dev-1 on 2026-10-01: enable Remote Desktop on it (runbook section 5) |
+| JCI laptop (RDP) | `ma-5p23zb4` (no Tailscale -- plain local hostname) | Corporate Metasys laptop, MDM-managed. Deliberately kept off Tailscale; only reachable when this box is on the same local network. Enable Remote Desktop on it directly (same fDenyTSConnections/firewall fix as the Windows desktop) |
+| Proxy laptop (RDP) | `proxy.tail018f42.ts.net` | This laptop, for use from the desktop |
+
+Not listed on purpose: `greystar-m16-bench`, a customer's Metasys server
+(Greystar, cut over 2026-09-30), not a workstation.
+
+Rules it follows:
+
+- **Never overwrites an existing `confCons.xml`.** On a machine where
+  mRemoteNG has already been used (the proxy laptop), the list is written
+  beside it as `%APPDATA%\mRemoteNG\homelab-connections.xml` and the import
+  step is printed: **File > Import > From File...** and pick that file. The
+  Homelab folder appears in the existing tree. `-Replace` makes it the main
+  file instead, after a dated backup.
+- **No passwords are written.** The first connection asks. To save
+  credentials, set a master password on the connections file first
+  (Tools > Options > Security), as the runbook's section 3 already says.
+- **Adding a machine or a second property is one line**: a new row in
+  `$Machines`, or a new `$TailnetSuffix`. Same idea as `$IdentityTag`.
+
+File format notes, for whoever touches this next: mRemoteNG 1.76.20
+`confCons.xml`, ConfVersion 2.6, `FullFileEncryption="false"`. The root
+`Protected` attribute is a fixed value: the string `ThisIsNotProtected`
+AES-GCM-encrypted under mRemoteNG's default file password, which is the state
+a brand-new unprotected file is in (the app's own check,
+`ConnectionsFileIsAuthentic`, accepts exactly that). It was precomputed on
+dev-1 with the app's KDF and cipher because Windows PowerShell 5.1 has no
+AES-GCM. The generated XML parses and the probe table was exercised with
+PowerShell 7 on dev-1. **The first real import on the proxy laptop (2026-10-01
+09:54 local) failed** with "An error occurred while importing the file": the
+file carried only the attributes that matter, and the importer reads every
+attribute a real file has with no null check. Fixed the same morning by
+writing the full attribute set with the app's own defaults; the second import
+is the check that settles it. Run the script with mRemoteNG closed. The check that settles it: run the one-liner on the proxy
+laptop, open mRemoteNG, see the Homelab folder with 8 entries and no "wrong
+password" or file-format error. If that fails, the printed table is enough to
+add the entries by hand, and the task row (TSK-173) is where to record it.
+
 ## Controls field tools (`controls-field-tools`)
 
 Cloned by `setup.ps1` to `%USERPROFILE%\controls-field-tools` — private repo,
@@ -280,16 +359,32 @@ the end if that happens.
 - [ ] Windows 11 Pro licensed and activated on proxy laptop (`setup.ps1`'s edition check prints "OK" at the top of its run)
 - [ ] `setup.ps1` run successfully — winget apps installed, controls-field-tools + homelab-bootstrap cloned
 - [ ] Tailscale signed in on proxy laptop + all 4 targets, MagicDNS on
-- [ ] mRemoteNG has 4 working saved connections, tested end to end
+- [ ] mRemoteNG opens the generated Homelab folder (8 entries) without error, and the 4 target machines connect end to end (`Install-MRemoteNG.ps1`, TSK-173; RDP on the Windows desktop still needs enabling)
 - [ ] Bitwarden vault accessible from proxy laptop
 - [ ] `gh auth login` done, both private-repo clones succeed
 - [ ] Dark mode applied; identity wallpaper shows PROXY + hostname/IP
 - [ ] "IP Speed Dial (Admin)" desktop shortcut exists and launches elevated with no right-click needed
 - [ ] Ubuntu lock-screen extension installed on both servers, verified session survives a lock
-- [ ] IT/security check done on corporate laptop before installing anything there
 - [ ] Niagara Workbench / Metasys SCT confirmed and installed manually (separate licensing track)
 
 ## Changelog
+
+### 2026-10-01 (2)
+- Fix: the generated connections file failed to import on the proxy laptop
+  ("An error occurred while importing the file"). Cause: only the useful
+  attributes were written, and mRemoteNG's importer dereferences every
+  attribute a real file carries. Now writes the complete 1.76.20 attribute
+  set (114 per node) with the app's defaults. Also: run the script with
+  mRemoteNG closed, or it saves its own copy over the new file on exit.
+
+### 2026-10-01
+- Added `Install-MRemoteNG.ps1` (TSK-173): installs mRemoteNG and writes a
+  ready-made "Homelab" connection list (RDP/SSH per machine, MagicDNS names,
+  no passwords), never overwriting an existing `confCons.xml`, then probes
+  every host:port and prints open/closed. `setup.ps1` calls it. Brendan's
+  ask: "Add mRemoteNG to all workstations and setup and ready for me to
+  connect to them through the proxy laptop." Unverified in mRemoteNG itself
+  until run on a real Windows box; see the section above for the check.
 
 ### 2026-09-25 (6)
 - Added Claude Code CLI (`Anthropic.ClaudeCode`) — Brendan flagged it was

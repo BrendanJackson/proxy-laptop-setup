@@ -12,7 +12,8 @@
 #      private repos; needs GitHub auth).
 #   3. Sets dark mode and this machine's identity wallpaper -- see
 #      $IdentityTag below to customize for a second property/site.
-#   4. Prints the manual steps that can't be scripted (sign-ins, vendor-gated
+#   4. Writes the mRemoteNG "Homelab" connection list (Install-MRemoteNG.ps1).
+#   5. Prints the manual steps that can't be scripted (sign-ins, vendor-gated
 #      software, per-machine config).
 #
 # Vendor-gated tools this script deliberately does NOT install:
@@ -180,6 +181,28 @@ else {
     Write-Host "Desktop shortcut created: 'IP Speed Dial (Admin)' -- double-click elevates (UAC prompt still appears once per launch)." -ForegroundColor Green
 }
 
+# ---- mRemoteNG connection list (TSK-173, 2026-10-01) ----
+# mRemoteNG itself is in $apps above; this adds the ready-made "Homelab" folder
+# (RDP/SSH entry per machine, MagicDNS names) so nothing is typed by hand. The
+# logic lives in Install-MRemoteNG.ps1 so it can also run alone on the Windows
+# desktop or any future box. Local file when run from a clone; fetched from the
+# repo when run via the irm | iex one-liner (no file on disk then).
+Write-Host "`n--- mRemoteNG connection list ---" -ForegroundColor Yellow
+$mrngScript = Join-Path $PSScriptRoot "Install-MRemoteNG.ps1"
+if ($PSScriptRoot -and (Test-Path $mrngScript)) {
+    & $mrngScript -SkipInstall
+}
+else {
+    try {
+        $mrngCode = irm "https://raw.githubusercontent.com/BrendanJackson/proxy-laptop-setup/master/Install-MRemoteNG.ps1"
+        $mrngBlock = [scriptblock]::Create($mrngCode)
+        & $mrngBlock -SkipInstall
+    }
+    catch {
+        Write-Host "Could not fetch Install-MRemoteNG.ps1 ($($_.Exception.Message)). Run it on its own later; see README 'mRemoteNG connection list'." -ForegroundColor DarkYellow
+    }
+}
+
 Write-Host "`nDone with winget batch. Manual steps still required:" -ForegroundColor Green
 Write-Host "1. Sign into Tailscale (opens browser SSO)."
 Write-Host "2. Sign into Bitwarden, unlock vault."
@@ -187,3 +210,4 @@ Write-Host "3. Run 'gh auth login' if the controls-field-tools/homelab-bootstrap
 Write-Host "4. Confirm controls-specific tools below (Niagara Workbench / Metasys SCT are vendor-gated, not winget-installable)."
 Write-Host "5. Set Power Plan to 'never sleep' if this machine will also host RDP inbound."
 Write-Host "6. Use the 'IP Speed Dial (Admin)' desktop shortcut (or right-click Run-IP-SpeedDial.bat -> Run as Administrator)."
+Write-Host "7. Open mRemoteNG: if it already had a connections file, File > Import > From File > %APPDATA%\mRemoteNG\homelab-connections.xml. Set a master password before saving any credential."
