@@ -53,13 +53,8 @@ if ($MachineConfig.ComputerName -and $env:COMPUTERNAME -ne $MachineConfig.Comput
     Add-ManualStep "Restart (computer was renamed to $($MachineConfig.ComputerName)), then sign into Tailscale so its tailnet name is $($MachineConfig.ComputerName.ToLower())."
 }
 
-# ---- dark mode ----
-Write-Host "`n--- dark mode ---" -ForegroundColor Yellow
-$personalizeKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'
-New-Item -Path $personalizeKey -Force | Out-Null
-Set-ItemProperty -Path $personalizeKey -Name AppsUseLightTheme -Value 0 -Type DWord
-Set-ItemProperty -Path $personalizeKey -Name SystemUsesLightTheme -Value 0 -Type DWord
-Write-Host "Dark mode set (apps + system)." -ForegroundColor Green
+# Dark mode, power and the other behaviour defaults live in preferences.ps1
+# (no installs there, so it can run alone on an old machine).
 
 # ---- identity wallpaper ----
 # Templates live once, in homelab-bootstrap, shared with the Linux boxes.

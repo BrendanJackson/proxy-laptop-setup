@@ -10,10 +10,13 @@
 # How it is put together (TSK-203, 2026-10-06):
 #   windows/lib/common.ps1     helpers every module uses
 #   windows/modules/<name>.ps1 one piece of a machine: base (every machine),
-#                              controls (field tech), remote-hub, rdp-host,
-#                              fx-workbench
+#                              preferences (power, dark mode, conveniences;
+#                              every machine), controls (field tech),
+#                              remote-hub, rdp-host, fx-workbench
 #   windows/machines/<m>.ps1   one short file per machine: its name, wallpaper,
-#                              and which modules it gets
+#                              and which modules it gets. "existing" = an old
+#                              machine that only takes the shared defaults.
+#   -Only a,b                  run just those modules (e.g. -Only preferences)
 # A new machine is a new file in windows/machines/. New code is only needed
 # for a genuinely new kind of piece -- same rule as homelab-bootstrap's roles.
 #
@@ -21,7 +24,12 @@
 # files on disk; fetches each piece from this repo's master branch).
 
 [CmdletBinding()]
-param([string]$Machine = "proxy")
+param(
+    [string]$Machine = "proxy",
+    # Run only these pieces instead of the machine's full list, e.g.
+    # -Only preferences   (handy on an old machine: -Machine existing -Only preferences)
+    [string[]]$Only
+)
 
 $ErrorActionPreference = "Continue"
 $RepoRaw = "https://raw.githubusercontent.com/BrendanJackson/proxy-laptop-setup/master"
@@ -46,8 +54,9 @@ catch {
     return
 }
 
-Write-Host "Setting up '$Machine' -- modules: $($MachineConfig.Modules -join ', ')" -ForegroundColor Cyan
-foreach ($m in $MachineConfig.Modules) {
+$modules = if ($Only) { $Only | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim().ToLower() } | Where-Object { $_ } } else { $MachineConfig.Modules }
+Write-Host "Setting up '$Machine' -- modules: $($modules -join ', ')" -ForegroundColor Cyan
+foreach ($m in $modules) {
     . ([scriptblock]::Create((Get-RepoScript "windows/modules/$m.ps1")))
 }
 
