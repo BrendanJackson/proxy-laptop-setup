@@ -14,9 +14,16 @@
 
 Write-Section "preferences: power, dark mode, conveniences"
 
+# One failed setting must not hide the rest: report it by name and carry on.
 function Set-Reg([string]$Path, [string]$Name, $Value, [string]$Type = "DWord") {
-    if (-not (Test-Path $Path)) { New-Item -Path $Path -Force | Out-Null }
-    Set-ItemProperty -Path $Path -Name $Name -Value $Value -Type $Type
+    try {
+        if (-not (Test-Path $Path)) { New-Item -Path $Path -Force -ErrorAction Stop | Out-Null }
+        Set-ItemProperty -Path $Path -Name $Name -Value $Value -Type $Type -ErrorAction Stop
+    }
+    catch {
+        Write-Host "Could not set $Name ($Path): $($_.Exception.Message)" -ForegroundColor Red
+        Add-ManualStep "Setting '$Name' was refused by Windows; tell Claude the red line it printed."
+    }
 }
 
 # ---- power -------------------------------------------------------------------
@@ -31,16 +38,16 @@ powercfg /change monitor-timeout-ac 30
 powercfg /change monitor-timeout-dc 5
 powercfg /change standby-timeout-dc 15
 # On battery: Energy Saver (Battery Saver) on at ANY charge level, i.e.
-# always on when unplugged.
+# always on when unplugged. This is the "low power mode": it lowers
+# performance and background activity whenever the cable is out.
 powercfg /setdcvalueindex SCHEME_CURRENT SUB_ENERGYSAVER ESBATTTHRESHOLD 100
 powercfg /setactive SCHEME_CURRENT
-# Power mode (Settings > System > Power): "Best power efficiency" on battery,
-# "Balanced" plugged in. Windows keeps one value per power source here.
-$overlays = 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes'
-Set-Reg $overlays ActiveOverlayDcPowerScheme '961cc777-2547-4f9d-8174-7d86181b8a7a' String
-Set-Reg $overlays ActiveOverlayAcPowerScheme '00000000-0000-0000-0000-000000000000' String
+# NOT set here: the Settings "Power mode" slider. Its registry key
+# (...\Control\Power\User\PowerSchemes) is locked to the SYSTEM account, so
+# an admin script gets "Requested registry access is not allowed" (FXWB-1,
+# 2026-10-06). Energy Saver above already gives low power on battery.
 $acText = if ($acSleep -eq 0) { "never sleeps" } else { "sleeps after $([math]::Round($acSleep / 60, 1)) h idle" }
-Write-Host "Plugged in: balanced, $acText, screen off 30 min. On battery: best power efficiency + Energy Saver, screen 5 min, sleep 15 min." -ForegroundColor Green
+Write-Host "Plugged in: $acText, screen off 30 min. On battery: Energy Saver always on, screen 5 min, sleep 15 min." -ForegroundColor Green
 
 # Fast startup off: "Shut down" really shuts down, so network adapters, drivers
 # and a static IP set by IP Speed Dial come back clean, and updates finish.

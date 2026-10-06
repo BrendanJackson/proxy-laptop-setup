@@ -14,11 +14,48 @@ function Add-ManualStep([string]$Text) { if (-not $ManualSteps.Contains($Text)) 
 
 function Write-Section([string]$Title) { Write-Host "`n=== $Title ===" -ForegroundColor Cyan }
 
+# Direct-download fallbacks for apps whose vendor deletes old installers, so a
+# stale winget catalog points at a file that no longer exists. Notion does
+# this; a fresh Windows install failed on it every time (FXWB-1, 2026-10-06).
+# The URL must always redirect to the CURRENT installer.
+$WingetFallbacks = @{
+    "Notion.Notion" = @{ Url = "https://www.notion.so/desktop/windows/download"; Args = "/S"; Name = "Notion" }
+}
+
+$script:WingetSourceUpdated = $false
 function Install-WingetApps {
     param([string[]]$Ids)
+    # A fresh Windows install ships an old copy of winget's catalog; refresh it
+    # once per run so installs use current download links.
+    if (-not $script:WingetSourceUpdated) {
+        Write-Host "Refreshing the winget catalog..." -ForegroundColor DarkGray
+        winget source update --disable-interactivity | Out-Null
+        $script:WingetSourceUpdated = $true
+    }
     foreach ($app in $Ids) {
         Write-Host "`n--- $app ---" -ForegroundColor Yellow
-        winget install --id $app --exact --silent --accept-package-agreements --accept-source-agreements
+        winget install --id $app --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+        # Exit codes vary (already installed, no upgrade available...), so ask
+        # winget whether the app is there rather than trusting the code.
+        winget list --id $app --exact --disable-interactivity *> $null
+        if ($LASTEXITCODE -eq 0) { continue }
+        $fb = $WingetFallbacks[$app]
+        if ($fb) {
+            Write-Host "winget could not install $app -- downloading $($fb.Name) directly from the vendor." -ForegroundColor DarkYellow
+            $tmp = Join-Path $env:TEMP "$($fb.Name)-setup.exe"
+            try {
+                Invoke-WebRequest -Uri $fb.Url -OutFile $tmp -UseBasicParsing
+                Start-Process -FilePath $tmp -ArgumentList $fb.Args -Wait
+                Write-Host "$($fb.Name) installed from the vendor download." -ForegroundColor Green
+            }
+            catch {
+                Write-Host "Direct download of $($fb.Name) failed too: $($_.Exception.Message)" -ForegroundColor Red
+                Add-ManualStep "Install $($fb.Name) by hand from $($fb.Url)"
+            }
+        }
+        else {
+            Add-ManualStep "$app did not install (see its winget error above). Re-run setup; if it fails again, install it by hand."
+        }
     }
 }
 
