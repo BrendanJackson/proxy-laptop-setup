@@ -1,6 +1,10 @@
-# Proxy Laptop Setup
+# Windows Machine Setup (proxy laptop, FXWB-1, and the next one)
 
-One-command bootstrap for the Windows 11 Pro proxy laptop: single-auth remote
+> The repo is still named `proxy-laptop-setup`, so the proxy laptop's
+> one-liner keeps working. Since 2026-10-06 it sets up **any** of our Windows
+> machines from shared pieces. Start at **"How this repo is laid out"** below.
+
+Originally: one-command bootstrap for the Windows 11 Pro proxy laptop: single-auth remote
 access to the two Windows machines + two Ubuntu/GNOME servers, corporate-laptop
 app access without a second license, and the Ithaca Solutions controls field
 tools (Metasys/Niagara BAS work).
@@ -16,6 +20,123 @@ with zero GitHub auth on a bare machine). It contains only the app list and
 setup instructions — no secrets, no customer data. `controls-field-tools`
 (the actual field tools this installs) is a separate, private repo and is
 unaffected.
+
+## How this repo is laid out (2026-10-06, TSK-203)
+
+Brendan, 2026-10-06: *"Every machine I use will have these; you can structure
+the git repo around this."* So a machine is now built from pieces, the same
+way `homelab-bootstrap` builds the Linux boxes from roles:
+
+| Piece | File | What it adds | Who gets it |
+|---|---|---|---|
+| **base** | `windows/modules/base.ps1` | Tailscale, Bitwarden (Vaultwarden client), VS Code, Notepad++, Brave, Chrome, Git, GitHub CLI, Windows Terminal, Notion, Claude + Claude Code; dark mode; identity wallpaper; computer name | every machine |
+| **controls** | `windows/modules/controls.ps1` | Python, Wireshark, PuTTY; controls-field-tools with the IP Speed Dial and Capture Recipes shortcuts; checks for Npcap, YABE, GlobalProtect | every field laptop |
+| **remote-hub** | `windows/modules/remote-hub.ps1` | mRemoteNG + the ready-made connection list | the machine you drive others from (proxy) |
+| **rdp-host** | `windows/modules/rdp-host.ps1` | Remote Desktop on + firewall, no sleep on AC power | a machine the proxy drives (FXWB-1) |
+| **fx-workbench** | `windows/modules/fx-workbench.ps1` | Checks FX Workbench is installed, points at the license finder (the installer itself is licensed, so it's manual) | FXWB-1 |
+
+Each machine is one short file in `windows/machines/` that names its pieces,
+wallpaper and computer name:
+
+| Machine | File | Pieces |
+|---|---|---|
+| Proxy laptop | `windows/machines/proxy.ps1` | base, controls, remote-hub |
+| FXWB-1 (FX Workbench field laptop) | `windows/machines/fxwb-1.ps1` | base, controls, rdp-host, fx-workbench |
+
+**Add a machine:** copy a machine file, change its name/wallpaper/pieces. New
+code is only needed for a genuinely new kind of piece. **Add an app to every
+machine:** one line in `base.ps1`; every machine picks it up on its next run.
+
+Shared helpers are in `windows/lib/common.ps1`. One-off tools (run by hand)
+are in `windows/tools/`. Wallpaper designs live in `homelab-bootstrap`
+(`dotfiles/wallpapers/`), shared with the Linux boxes.
+
+### One-liners
+
+Open PowerShell **as Administrator** and paste the line for the machine.
+
+Proxy laptop (unchanged from before; no `-Machine` means proxy):
+
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process -Force; iex (irm https://raw.githubusercontent.com/BrendanJackson/proxy-laptop-setup/master/setup.ps1)
+```
+
+FXWB-1, or any other machine (the name is its file in `windows/machines/`):
+
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process -Force; & ([scriptblock]::Create((irm https://raw.githubusercontent.com/BrendanJackson/proxy-laptop-setup/master/setup.ps1))) -Machine fxwb-1
+```
+
+Re-running is safe. The first run usually stops short of the private-repo
+steps (GitHub sign-in), so expect to run it twice. The manual steps that are
+left are printed, numbered, at the very end.
+
+## FXWB-1: the FX Workbench field laptop
+
+Shared by Brendan and Allen. Windows 11 Pro. Driven from the proxy laptop by
+Remote Desktop over Tailscale. Order:
+
+1. Windows 11 **Pro** installed and signed in (see the next section; Pro is
+   required for Remote Desktop into it).
+2. Run the FXWB-1 one-liner above. It renames the computer to `FXWB-1`.
+   Restart when it says so, then run it again.
+3. Work through the numbered manual steps it prints: Tailscale sign-in,
+   Bitwarden (choose **Self-hosted**, enter the Vaultwarden URL),
+   `gh auth login`, Npcap, YABE, GlobalProtect, FX Workbench.
+4. On the **proxy laptop**, run `Install-MRemoteNG.ps1` again (it now lists
+   FXWB-1) and connect once.
+
+### Moving GlobalProtect from the old laptop
+
+GlobalProtect's installer comes from the VPN portal itself, so the move is
+"carry the portal address over, then sign in". No password or key is copied.
+
+1. On the **old** laptop, PowerShell (no admin needed):
+   ```powershell
+   Set-ExecutionPolicy Bypass -Scope Process -Force; iex (irm https://raw.githubusercontent.com/BrendanJackson/proxy-laptop-setup/master/windows/tools/Export-GlobalProtect.ps1)
+   ```
+   It writes `globalprotect-export.json` to that Desktop and prints the
+   portal address.
+2. Copy that file to **FXWB-1's Desktop** (USB stick, Drive, email to
+   yourself; it holds only the portal address and certificate *names*).
+3. Re-run the FXWB-1 one-liner. If GlobalProtect isn't installed yet, it
+   prints the portal address: open it in Brave, sign in, download and install
+   the Windows 64-bit agent, re-run. Once it's installed, the run pre-fills
+   the portal.
+4. Sign in from the tray icon (password in Vaultwarden) and connect once.
+
+If the export listed certificates and sign-in fails with a certificate
+error, the VPN wants a client certificate too. Export that one from the old
+laptop by hand (`certmgr.msc` > Personal > Certificates > right-click >
+All Tasks > Export, *with* private key, password-protected) and import it on
+FXWB-1. Do this one deliberately: it is a credential.
+
+### FX Workbench license
+
+Version on hand: FX Workbench and FX Workbench Pro **14.15.1** (Brendan,
+2026-10-06). Install both from your installer copies, as Administrator.
+
+FX Workbench is built on Tridium Niagara 4. A Niagara license is a small file
+tied to **one machine** by that machine's **Host ID**. A license copied from
+another computer won't unlock this one. To find out where yours is and what
+it's tied to, run the license finder on the machine where Workbench already
+works, **and** on FXWB-1:
+
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process -Force; iex (irm https://raw.githubusercontent.com/BrendanJackson/proxy-laptop-setup/master/windows/tools/Find-NiagaraLicense.ps1)
+```
+
+It lists every license file, the Host ID it names, who issued it (brand) and
+when it expires. FXWB-1's own Host ID is shown in Workbench (Tools > License
+Manager). What happens next depends on what it finds:
+
+- **A license naming FXWB-1's Host ID**: done.
+- **A license for the old machine only**: FXWB-1 needs its own license (or a
+  transfer). Send the issuer (the brand/vendor on the license) FXWB-1's Host
+  ID. Who issues FX licenses for you hasn't been confirmed yet; the brand
+  line in the output names them.
+- **Nothing found anywhere**: Workbench may be running in a demo/unlicensed
+  mode on the old machine. Check Help > About there.
 
 ## Before you touch the laptop: Windows 11 Pro
 
@@ -149,7 +270,9 @@ scripted — they're printed at the end of the run, and repeated here:
 | Git | Version control for this repo and controls-field-tools. Git for Windows bundles Git Credential Manager, so `gh auth login` is enough — no separate token wrangling. |
 | Bitwarden | Shared vault, same account signed in everywhere that needs it. |
 | Google Chrome | Browser SSO flows (Tailscale, GitHub) and general use. |
-| Wireshark | Field diagnosis when a BACnet/IP device won't talk — `bacnet` filter, Who-Is/I-Am pairs, duplicate device IDs. See the Notion runbook for the 5-step loop. |
+| **Notepad++** | *Added 2026-10-06, base (every machine).* Quick edits to config/CSV/log files without opening VS Code. |
+| **Brave** | *Added 2026-10-06, base (every machine).* Brendan's browser alongside Chrome (Chrome stays: it renders the identity wallpaper). |
+| Wireshark | Field diagnosis when a BACnet/IP device won't talk — `bacnet` filter, Who-Is/I-Am pairs, duplicate device IDs. For the common checks, use controls-field-tools' **Capture Recipes** (desktop shortcut) instead of driving Wireshark by hand. Npcap (its capture driver) is a manual install; setup tells you. |
 | PuTTY | SSH fallback for anything mRemoteNG doesn't cover cleanly. |
 | **GitHub CLI (`gh`)** | *Added for controls-field-tools.* It's a **private** repo — `gh auth login` is the one clean way to authenticate `git clone`/`pull` against it without hand-rolling a PAT. |
 | **Python 3.12** | *Added for controls-field-tools.* `site-audit/bas_diff.py` and `site_tool.py` are stdlib-only Python — no interpreter was in the original app list, so the tool would clone fine and then not run. |
@@ -326,8 +449,9 @@ apply here.
   see `homelab-bootstrap/docs/DIVERGENCE.md` #16 for why they're split that
   way instead of unified into one script.
 
-**For a second property, site, or client setup:** edit `$IdentityTag` near
-the top of `setup.ps1` (defaults to `"remote workstation"`) before running —
+**For a second property, site, or client setup:** edit `IdentityTag` in the
+machine's file in `windows/machines/` (the proxy's is `"remote workstation"`),
+or copy it to a new machine file —
 e.g. `"remote workstation - Ivy House"`. That's the whole change; nothing
 else in the pipeline is specific to this one laptop or property. The Linux
 side has the equivalent override (`IDENTITY_TAG` in homelab-bootstrap's
@@ -368,6 +492,20 @@ the end if that happens.
 - [ ] Niagara Workbench / Metasys SCT confirmed and installed manually (separate licensing track)
 
 ## Changelog
+
+### 2026-10-06 (TSK-203)
+- Restructured into shared pieces + one file per machine (see "How this repo
+  is laid out"). `setup.ps1` is now a small loader; `-Machine` picks the
+  machine and defaults to `proxy`, so the original one-liner is unchanged.
+- Added FXWB-1 (FX Workbench field laptop): `windows/machines/fxwb-1.ps1`,
+  the `rdp-host` and `fx-workbench` pieces, its own "fx" wallpaper
+  (homelab-bootstrap), and an mRemoteNG entry so the proxy laptop can drive it.
+- Base gains Notepad++ and Brave on every machine.
+- New tools: `Export-GlobalProtect.ps1` / `Import-GlobalProtect.ps1` (move the
+  VPN portal between laptops), `Find-NiagaraLicense.ps1` (find the FX
+  Workbench license and its Host ID).
+- Controls piece now checks for Npcap, YABE and GlobalProtect and links the
+  new controls-field-tools Capture Recipes.
 
 ### 2026-10-01 (2)
 - Fix: the generated connections file failed to import on the proxy laptop

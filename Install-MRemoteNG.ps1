@@ -74,6 +74,7 @@ $Machines = @(
     @{ Name = "homeassistant-1"; Host = "homeassistant-1"; Descr = "Ubuntu Home Assistant box (OptiPlex #1, xrdp)";                           Protocols = @("RDP", "SSH"); User = "master" },
     @{ Name = "Windows desktop"; Host = "desktop-4539ppg"; Descr = "Windows desktop, 8TB backup target. Enable Remote Desktop on it first (runbook section 5)."; Protocols = @("RDP", "SSH"); User = "" },
     @{ Name = "JCI laptop";      Host = "ma-5p23zb4";      Descr = "Corporate Metasys laptop, MDM-managed. No Tailscale -- reachable only on the same local network. Enable Remote Desktop on it first."; Protocols = @("RDP"); User = ""; Tailnet = $false },
+    @{ Name = "FXWB-1";          Host = "fxwb-1";          Descr = "FX Workbench field laptop (Brendan/Allen). Remote Desktop is turned on by its setup (machine fxwb-1)."; Protocols = @("RDP"); User = "" },
     @{ Name = "Proxy laptop";    Host = "proxy";           Descr = "This proxy laptop itself, for use from the desktop";                       Protocols = @("RDP"); User = "" }
 )
 # Deliberately not listed: greystar-m16-bench. It is a customer's Metasys
