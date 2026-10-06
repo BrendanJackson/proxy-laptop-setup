@@ -2,8 +2,8 @@
 # Desktop over Tailscale). Brendan, 2026-10-06: "mRemoteNG the full set up so
 # that the proxy laptop can drive this one."
 #
-# Turns on Remote Desktop, opens it in the Windows firewall, and stops the
-# machine sleeping while plugged in -- a sleeping laptop is an unreachable one.
+# Turns on Remote Desktop, opens it in the Windows firewall, and makes closing
+# the lid do nothing while plugged in.
 # Network Level Authentication stays on (Windows default).
 
 Write-Section "rdp-host: reachable by Remote Desktop"
@@ -19,13 +19,14 @@ else {
     Write-Host "Remote Desktop on, firewall rule enabled." -ForegroundColor Green
 }
 
-# Plugged in: never sleep, never hibernate, closing the lid does nothing.
-# On battery the Windows defaults are left alone, so it still sleeps in a bag.
-powercfg /change standby-timeout-ac 0
-powercfg /change hibernate-timeout-ac 0
+# Sleep timing comes from preferences.ps1 (5 h idle on AC by default, per
+# Brendan 2026-10-06). A sleeping machine can't be reached, so a machine that
+# must always answer sets AcSleepMinutes = 0 in its machine file.
+# Plugged in, closing the lid does nothing, so it can sit closed on a desk and
+# still be driven remotely. On battery the lid still sleeps it.
 powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 0
 powercfg /setactive SCHEME_CURRENT
-Write-Host "On AC power: no sleep, no hibernate, lid close does nothing." -ForegroundColor Green
+Write-Host "Plugged in: closing the lid does nothing." -ForegroundColor Green
 
 Add-ManualStep "Remote Desktop sign-in uses the Windows ACCOUNT PASSWORD, not the PIN. If you sign in with a Microsoft account, use that account's password in mRemoteNG."
 Add-ManualStep "On the proxy laptop, re-run Install-MRemoteNG.ps1 (it lists $($MachineConfig.ComputerName) now) and connect once to confirm."

@@ -29,10 +29,11 @@ way `homelab-bootstrap` builds the Linux boxes from roles:
 
 | Piece | File | What it adds | Who gets it |
 |---|---|---|---|
-| **base** | `windows/modules/base.ps1` | Tailscale, Bitwarden (Vaultwarden client), VS Code, Notepad++, Brave, Chrome, Git, GitHub CLI, Windows Terminal, Notion, Claude + Claude Code; dark mode; identity wallpaper; computer name | every machine |
+| **base** | `windows/modules/base.ps1` | Tailscale, Bitwarden (Vaultwarden client), VS Code, Notepad++, Brave, Chrome, Git, GitHub CLI, Windows Terminal, Notion, Claude + Claude Code; identity wallpaper; computer name | every machine |
+| **preferences** | `windows/modules/preferences.ps1` | Power: on battery best power efficiency + Energy Saver (screen 5 min, sleep 15 min); plugged in awake 5 h idle (screen off 30 min); fast startup off. System + app dark mode. Conveniences: file extensions and hidden files shown, Explorer opens on This PC, taskbar End task, clipboard history (Win+V), no Bing results in Start, classic right-click menu, long paths, Eastern time. Installs nothing | every machine, and old ones (see below) |
 | **controls** | `windows/modules/controls.ps1` | Python, Wireshark, PuTTY; controls-field-tools with the IP Speed Dial and Capture Recipes shortcuts; checks for Npcap, YABE, GlobalProtect | every field laptop |
 | **remote-hub** | `windows/modules/remote-hub.ps1` | mRemoteNG + the ready-made connection list | the machine you drive others from (proxy) |
-| **rdp-host** | `windows/modules/rdp-host.ps1` | Remote Desktop on + firewall, no sleep on AC power | a machine the proxy drives (FXWB-1) |
+| **rdp-host** | `windows/modules/rdp-host.ps1` | Remote Desktop on + firewall; lid close does nothing on AC | a machine the proxy drives (FXWB-1) |
 | **fx-workbench** | `windows/modules/fx-workbench.ps1` | Checks FX Workbench is installed, points at the license finder (the installer itself is licensed, so it's manual) | FXWB-1 |
 
 Each machine is one short file in `windows/machines/` that names its pieces,
@@ -40,8 +41,18 @@ wallpaper and computer name:
 
 | Machine | File | Pieces |
 |---|---|---|
-| Proxy laptop | `windows/machines/proxy.ps1` | base, controls, remote-hub |
-| FXWB-1 (FX Workbench field laptop) | `windows/machines/fxwb-1.ps1` | base, controls, rdp-host, fx-workbench |
+| Proxy laptop | `windows/machines/proxy.ps1` | base, preferences, controls, remote-hub |
+| FXWB-1 (FX Workbench field laptop) | `windows/machines/fxwb-1.ps1` | base, preferences, controls, rdp-host, fx-workbench |
+| Any older machine | `windows/machines/existing.ps1` | preferences only: no rename, no wallpaper, no new apps |
+
+**Updating an old machine:** `-Machine existing` applies the shared defaults
+without touching anything else. `-Only <pieces>` runs just the pieces you
+name on any machine, e.g. `-Only preferences`. Same one-liner as below,
+with that on the end.
+
+**Sleep on AC:** 5 hours idle by default. A sleeping machine can't be reached
+by Remote Desktop, so a machine that must always answer sets
+`AcSleepMinutes = 0` in its machine file.
 
 **Add a machine:** copy a machine file, change its name/wallpaper/pieces. New
 code is only needed for a genuinely new kind of piece. **Add an app to every
@@ -492,6 +503,17 @@ the end if that happens.
 - [ ] Niagara Workbench / Metasys SCT confirmed and installed manually (separate licensing track)
 
 ## Changelog
+
+### 2026-10-06 (2) (TSK-205)
+- New `preferences` piece on every machine: battery = best power efficiency
+  + Energy Saver, plugged in = awake 5 h, fast startup off, system dark mode,
+  and the conveniences listed in the table. Dark mode moved here from base.
+- `rdp-host` no longer forces never-sleep; it follows the 5 h default
+  (`AcSleepMinutes` overrides per machine).
+- `-Machine existing` and `-Only` for updating old machines piece by piece.
+- Not included: Claude Code no-prompt mode and Remote Control at sign-in.
+  Blocked by the session's safety check pending a permission rule from
+  Brendan; see TSK-205.
 
 ### 2026-10-06 (TSK-203)
 - Restructured into shared pieces + one file per machine (see "How this repo

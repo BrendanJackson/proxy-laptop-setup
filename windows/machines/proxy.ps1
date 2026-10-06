@@ -11,5 +11,5 @@ $MachineConfig = @{
     IdentityTag    = "remote workstation"
     WallpaperTheme = "workstation"
     WallpaperLabel = "PROXY"
-    Modules        = @("base", "controls", "remote-hub")
+    Modules        = @("base", "preferences", "controls", "remote-hub")
 }

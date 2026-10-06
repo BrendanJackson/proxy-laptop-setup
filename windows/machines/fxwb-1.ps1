@@ -9,5 +9,6 @@ $MachineConfig = @{
     WallpaperTheme     = "fx"
     WallpaperLabel     = "FXWB-1"
     FxWorkbenchVersion = "14.15.1"
-    Modules            = @("base", "controls", "rdp-host", "fx-workbench")
+    # AcSleepMinutes unset = the 5 h default. Set 0 if it must always be reachable.
+    Modules            = @("base", "preferences", "controls", "rdp-host", "fx-workbench")
 }
