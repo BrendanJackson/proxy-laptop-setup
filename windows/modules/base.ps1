@@ -62,17 +62,44 @@ $HomelabDir = Join-Path $env:USERPROFILE "homelab-bootstrap"
 $hbReady = Sync-PrivateRepo -Repo "BrendanJackson/homelab-bootstrap" -Dir $HomelabDir
 Write-Host "`n--- identity wallpaper ---" -ForegroundColor Yellow
 $hostName = if ($MachineConfig.ComputerName) { $MachineConfig.ComputerName } else { $env:COMPUTERNAME }
+$theme = $MachineConfig.WallpaperTheme
+$wallpaperDone = $false
+
+# Three tiers, best first. All three render the same label/host/tag/ip, so a
+# machine always ends up identified; only the look differs.
+#
+#   1. the shared theme in homelab-bootstrap -- identical to the Linux boxes
+#   2. the same theme vendored in THIS repo, rendered by the same headless
+#      Chrome pipeline, for machines whose gh token cannot see that private repo
+#   3. a plain native drawing, which needs neither Chrome nor a second repo
 if ($hbReady) {
-    Set-IdentityWallpaper -HomelabDir $HomelabDir -Theme $MachineConfig.WallpaperTheme `
+    $wallpaperDone = Set-IdentityWallpaper -HomelabDir $HomelabDir -Theme $theme `
         -Label $MachineConfig.WallpaperLabel -HostName $hostName -Tag $MachineConfig.IdentityTag
 }
-else {
-    # No homelab-bootstrap (it is private, so this also happens when gh has no
-    # access to it) means no shared HTML theme and no Chrome render. Draw the
-    # same information natively instead of leaving the machine on the Windows
-    # Spotlight default -- FXWB-1 sat unlabelled for a week that way.
-    # Swapping back later changes only the look, not the contract.
-    Write-Host "homelab-bootstrap not available -- drawing the wallpaper natively instead." -ForegroundColor DarkYellow
+
+if (-not $wallpaperDone) {
+    # Tier 2. The theme is HTML, so it cannot be dot-sourced like a module --
+    # write it to a temp file and point Chrome at that. Works from a clone and
+    # from the irm | iex one-liner alike.
+    try {
+        $localTheme = Get-RepoScript "dotfiles/wallpapers/$theme.html"
+        if ($localTheme) {
+            $tmpTheme = Join-Path $env:TEMP "wallpaper-$theme.html"
+            Set-Content -Path $tmpTheme -Value $localTheme -Encoding utf8
+            Write-Host "homelab-bootstrap unavailable -- rendering this repo's '$theme' theme instead." -ForegroundColor DarkYellow
+            $wallpaperDone = Set-IdentityWallpaper -ThemeFile $tmpTheme `
+                -Label $MachineConfig.WallpaperLabel -HostName $hostName -Tag $MachineConfig.IdentityTag
+        }
+    }
+    catch {
+        # No vendored theme by that name; fall through to the native drawing.
+    }
+}
+
+if (-not $wallpaperDone) {
+    # Tier 3. Better than leaving the machine on the Windows Spotlight default:
+    # FXWB-1 sat unlabelled for a week because the only path was tier 1.
+    Write-Host "No HTML theme available -- drawing the wallpaper natively." -ForegroundColor DarkYellow
     try {
         $wallBlock = [scriptblock]::Create((Get-RepoScript "windows/tools/Set-InfoWallpaper.ps1"))
         & $wallBlock -Label $MachineConfig.WallpaperLabel -HostName $hostName `
