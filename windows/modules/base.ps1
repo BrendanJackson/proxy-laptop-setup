@@ -61,13 +61,26 @@ if ($MachineConfig.ComputerName -and $env:COMPUTERNAME -ne $MachineConfig.Comput
 $HomelabDir = Join-Path $env:USERPROFILE "homelab-bootstrap"
 $hbReady = Sync-PrivateRepo -Repo "BrendanJackson/homelab-bootstrap" -Dir $HomelabDir
 Write-Host "`n--- identity wallpaper ---" -ForegroundColor Yellow
-if (-not $hbReady) {
-    Write-Host "Skipped -- homelab-bootstrap isn't cloned yet (see above). Re-run setup once it is." -ForegroundColor DarkYellow
-}
-else {
-    $hostName = if ($MachineConfig.ComputerName) { $MachineConfig.ComputerName } else { $env:COMPUTERNAME }
+$hostName = if ($MachineConfig.ComputerName) { $MachineConfig.ComputerName } else { $env:COMPUTERNAME }
+if ($hbReady) {
     Set-IdentityWallpaper -HomelabDir $HomelabDir -Theme $MachineConfig.WallpaperTheme `
         -Label $MachineConfig.WallpaperLabel -HostName $hostName -Tag $MachineConfig.IdentityTag
+}
+else {
+    # No homelab-bootstrap (it is private, so this also happens when gh has no
+    # access to it) means no shared HTML theme and no Chrome render. Draw the
+    # same information natively instead of leaving the machine on the Windows
+    # Spotlight default -- FXWB-1 sat unlabelled for a week that way.
+    # Swapping back later changes only the look, not the contract.
+    Write-Host "homelab-bootstrap not available -- drawing the wallpaper natively instead." -ForegroundColor DarkYellow
+    try {
+        $wallBlock = [scriptblock]::Create((Get-RepoScript "windows/tools/Set-InfoWallpaper.ps1"))
+        & $wallBlock -Label $MachineConfig.WallpaperLabel -HostName $hostName `
+            -Tag $MachineConfig.IdentityTag -Install
+    }
+    catch {
+        Write-Host "Native wallpaper failed too ($($_.Exception.Message)). Cosmetic only." -ForegroundColor DarkYellow
+    }
 }
 
 Add-ManualStep "Sign into Tailscale (opens browser SSO)."
