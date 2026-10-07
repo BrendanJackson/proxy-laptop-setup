@@ -89,8 +89,12 @@ try {
         Set-Content (Join-Path $outDir "installed-software.txt") -Encoding utf8
     Write-Host "$($apps.Count) programs written to installed-software.txt" -ForegroundColor Green
 
-    # The ones this migration actually turns on.
-    foreach ($w in 'GlobalProtect', 'Workbench', 'Niagara', 'mRemoteNG', 'Npcap', 'BACnet') {
+    # The ones this migration actually turns on. Match on how the vendor really
+    # registers itself, not on the product's full name: YABE appears as
+    # "Yabe version 1.3.2", with no "BACnet" anywhere in it, so searching for
+    # "BACnet" reported it missing on MA-5P23ZB4 when it was installed.
+    foreach ($w in 'GlobalProtect', 'Workbench', 'Niagara', 'Tridium', 'mRemoteNG',
+                   'Npcap', 'Wireshark', 'Yabe', 'Metasys') {
         $hit = $apps | Where-Object { $_.DisplayName -like "*$w*" } | Select-Object -First 1
         if ($hit) { Write-Host ("  [x] {0,-14} {1} {2}" -f $w, $hit.DisplayName, $hit.DisplayVersion) -ForegroundColor Green }
         else      { Write-Host ("  [ ] {0,-14} not installed here" -f $w) -ForegroundColor DarkGray }
