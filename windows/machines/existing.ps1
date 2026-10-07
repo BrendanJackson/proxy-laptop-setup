@@ -8,5 +8,7 @@
 # Add more pieces here only if they install nothing an old machine wouldn't want.
 $MachineConfig = @{
     ComputerName = $null
-    Modules      = @("preferences")
+    # Off for an old machine: we are not weakening a box we may not know well.
+    ClaudeSkipPermissions = $false
+    Modules      = @("preferences", "claude")
 }
