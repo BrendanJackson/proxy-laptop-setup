@@ -10,5 +10,13 @@ $MachineConfig = @{
     WallpaperLabel     = "FXWB-1"
     FxWorkbenchVersion = "14.15.1"
     # AcSleepMinutes unset = the 5 h default. Set 0 if it must always be reachable.
-    Modules            = @("base", "preferences", "controls", "rdp-host", "fx-workbench")
+    # Claude Code runs unattended here: this box is driven over RDP and from the
+    # phone, so a permission prompt would just stall with nobody to answer it.
+    # Single user, so the trade is acceptable -- see windows/modules/claude.ps1.
+    ClaudeSkipPermissions = $true
+    # Reachable from claude.ai/code and the phone at every sign-in, under
+    # this name. Sessions it spawns run without prompts (the key above).
+    ClaudeRemoteControl   = $true
+    RemoteControlName     = "FXWB-1: FX Workbench"
+    Modules            = @("base", "preferences", "claude", "controls", "rdp-host", "fx-workbench")
 }

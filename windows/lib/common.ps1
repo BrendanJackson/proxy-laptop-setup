@@ -141,17 +141,24 @@ function New-DesktopShortcut {
 # same label/host/tag/ip query-string contract) -- one shared source of truth,
 # two OS-native apply steps. See homelab-bootstrap/docs/DIVERGENCE.md #16.
 function Set-IdentityWallpaper {
-    param([string]$HomelabDir, [string]$Theme, [string]$Label, [string]$HostName, [string]$Tag)
-    $themeFile = Join-Path $HomelabDir "dotfiles\wallpapers\$Theme.html"
+    # -ThemeFile renders a theme from anywhere and takes precedence over
+    # -HomelabDir/-Theme. It exists so the same Chrome pipeline can render a
+    # theme that is not in homelab-bootstrap -- that repo is private, so a
+    # machine whose gh token cannot see it would otherwise lose the artistic
+    # render entirely and fall back to the plain native drawing.
+    param([string]$HomelabDir, [string]$Theme, [string]$Label, [string]$HostName, [string]$Tag,
+          [string]$ThemeFile)
+    if (-not $ThemeFile) { $ThemeFile = Join-Path $HomelabDir "dotfiles\wallpapers\$Theme.html" }
+    $themeFile = $ThemeFile
     $chrome = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe"
     if (-not (Test-Path $chrome)) { $chrome = "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe" }
     if (-not (Test-Path $themeFile)) {
         Write-Host "Skipped -- $themeFile not found (homelab-bootstrap clone may be stale; try 'git -C $HomelabDir pull')." -ForegroundColor DarkYellow
-        return
+        return $false
     }
     if (-not (Test-Path $chrome)) {
         Write-Host "Skipped -- Chrome not found at the expected winget install path yet. Re-run setup in a new PowerShell window." -ForegroundColor DarkYellow
-        return
+        return $false
     }
     $wallDir = Join-Path $env:USERPROFILE "Pictures\wallpapers"
     New-Item -ItemType Directory -Path $wallDir -Force | Out-Null
@@ -159,17 +166,32 @@ function Set-IdentityWallpaper {
     $tsIp = ""
     if (Get-Command tailscale -ErrorAction SilentlyContinue) { $tsIp = (& tailscale ip -4 2>$null | Select-Object -First 1) }
     $url = "file:///$($themeFile -replace '\\','/')?label=$([uri]::EscapeDataString($Label))&host=$HostName&tag=$([uri]::EscapeDataString($Tag))&ip=$tsIp"
-    & $chrome --headless=new --no-sandbox --disable-gpu --hide-scrollbars --force-device-scale-factor=1 `
-        --window-size=1920,1080 --virtual-time-budget=8000 --screenshot="$out" "$url" 2>$null
+    # --user-data-dir is NOT optional. Without it, a headless Chrome launched
+    # while the user already has Chrome open just hands the URL to the running
+    # instance and exits 0 having written nothing, so the render silently
+    # produces no file. That is why this step "worked" in testing on a clean
+    # machine and never once produced a wallpaper on a machine in daily use.
+    $chromeProfile = Join-Path $env:TEMP "wallpaper-chrome-profile"
+    & $chrome --headless --no-sandbox --disable-gpu --hide-scrollbars --force-device-scale-factor=1 `
+        --user-data-dir="$chromeProfile" --no-first-run --window-size=1920,1080 `
+        --virtual-time-budget=8000 --screenshot="$out" "$url" 2>$null
     if (Test-Path $out) {
         Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name Wallpaper -Value $out
         Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name WallpaperStyle -Value 10   # fill
         Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name TileWallpaper -Value 0
+        # Windows 11 Spotlight owns the desktop until it is switched back to a
+        # picture, and it rotates its own image in on a timer -- so without this
+        # the render above silently disappears within the hour. Found on FXWB-1,
+        # which was still on the Spotlight default after setup had "set" a
+        # wallpaper. BackgroundType 0 = picture.
+        $wpKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers'
+        if (-not (Test-Path $wpKey)) { New-Item -Path $wpKey -Force | Out-Null }
+        Set-ItemProperty -Path $wpKey -Name 'BackgroundType' -Value 0 -Type DWord -Force
         RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
         Write-Host "Identity wallpaper set: $out" -ForegroundColor Green
         if (-not $tsIp) { Write-Host "(Tailscale IP blank -- sign in and re-run setup to fill it in.)" -ForegroundColor DarkYellow }
+        return $true
     }
-    else {
-        Write-Host "WARNING: Chrome produced no image -- wallpaper not set. Cosmetic only, rest of setup is unaffected." -ForegroundColor DarkYellow
-    }
+    Write-Host "WARNING: Chrome produced no image -- wallpaper not set. Cosmetic only, rest of setup is unaffected." -ForegroundColor DarkYellow
+    return $false
 }

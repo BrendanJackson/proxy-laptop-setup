@@ -61,13 +61,53 @@ if ($MachineConfig.ComputerName -and $env:COMPUTERNAME -ne $MachineConfig.Comput
 $HomelabDir = Join-Path $env:USERPROFILE "homelab-bootstrap"
 $hbReady = Sync-PrivateRepo -Repo "BrendanJackson/homelab-bootstrap" -Dir $HomelabDir
 Write-Host "`n--- identity wallpaper ---" -ForegroundColor Yellow
-if (-not $hbReady) {
-    Write-Host "Skipped -- homelab-bootstrap isn't cloned yet (see above). Re-run setup once it is." -ForegroundColor DarkYellow
-}
-else {
-    $hostName = if ($MachineConfig.ComputerName) { $MachineConfig.ComputerName } else { $env:COMPUTERNAME }
-    Set-IdentityWallpaper -HomelabDir $HomelabDir -Theme $MachineConfig.WallpaperTheme `
+$hostName = if ($MachineConfig.ComputerName) { $MachineConfig.ComputerName } else { $env:COMPUTERNAME }
+$theme = $MachineConfig.WallpaperTheme
+$wallpaperDone = $false
+
+# Three tiers, best first. All three render the same label/host/tag/ip, so a
+# machine always ends up identified; only the look differs.
+#
+#   1. the shared theme in homelab-bootstrap -- identical to the Linux boxes
+#   2. the same theme vendored in THIS repo, rendered by the same headless
+#      Chrome pipeline, for machines whose gh token cannot see that private repo
+#   3. a plain native drawing, which needs neither Chrome nor a second repo
+if ($hbReady) {
+    $wallpaperDone = Set-IdentityWallpaper -HomelabDir $HomelabDir -Theme $theme `
         -Label $MachineConfig.WallpaperLabel -HostName $hostName -Tag $MachineConfig.IdentityTag
+}
+
+if (-not $wallpaperDone) {
+    # Tier 2. The theme is HTML, so it cannot be dot-sourced like a module --
+    # write it to a temp file and point Chrome at that. Works from a clone and
+    # from the irm | iex one-liner alike.
+    try {
+        $localTheme = Get-RepoScript "dotfiles/wallpapers/$theme.html"
+        if ($localTheme) {
+            $tmpTheme = Join-Path $env:TEMP "wallpaper-$theme.html"
+            Set-Content -Path $tmpTheme -Value $localTheme -Encoding utf8
+            Write-Host "homelab-bootstrap unavailable -- rendering this repo's '$theme' theme instead." -ForegroundColor DarkYellow
+            $wallpaperDone = Set-IdentityWallpaper -ThemeFile $tmpTheme `
+                -Label $MachineConfig.WallpaperLabel -HostName $hostName -Tag $MachineConfig.IdentityTag
+        }
+    }
+    catch {
+        # No vendored theme by that name; fall through to the native drawing.
+    }
+}
+
+if (-not $wallpaperDone) {
+    # Tier 3. Better than leaving the machine on the Windows Spotlight default:
+    # FXWB-1 sat unlabelled for a week because the only path was tier 1.
+    Write-Host "No HTML theme available -- drawing the wallpaper natively." -ForegroundColor DarkYellow
+    try {
+        $wallBlock = [scriptblock]::Create((Get-RepoScript "windows/tools/Set-InfoWallpaper.ps1"))
+        & $wallBlock -Label $MachineConfig.WallpaperLabel -HostName $hostName `
+            -Tag $MachineConfig.IdentityTag -Install
+    }
+    catch {
+        Write-Host "Native wallpaper failed too ($($_.Exception.Message)). Cosmetic only." -ForegroundColor DarkYellow
+    }
 }
 
 Add-ManualStep "Sign into Tailscale (opens browser SSO)."

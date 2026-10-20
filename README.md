@@ -31,6 +31,7 @@ way `homelab-bootstrap` builds the Linux boxes from roles:
 |---|---|---|---|
 | **base** | `windows/modules/base.ps1` | Tailscale, Bitwarden (Vaultwarden client), VS Code, Notepad++, Brave, Chrome, Git, GitHub CLI, Windows Terminal, Notion, Claude + Claude Code; identity wallpaper; computer name | every machine |
 | **preferences** | `windows/modules/preferences.ps1` | Power: on battery best power efficiency + Energy Saver (screen 5 min, sleep 15 min); plugged in awake 5 h idle (screen off 30 min); fast startup off. System + app dark mode. Conveniences: file extensions and hidden files shown, Explorer opens on This PC, taskbar End task, clipboard history (Win+V), no Bing results in Start, classic right-click menu, long paths, Eastern time. Installs nothing | every machine, and old ones (see below) |
+| **claude** | `windows/modules/claude.ps1` | Claude Code: no permission prompts where the machine file opts in (`ClaudeSkipPermissions`), dark theme, 365-day history, push notifications, and a per-user scheduled task that keeps `claude remote-control` running so the machine shows in claude.ai/code and the phone app at every sign-in (`ClaudeRemoteControl`, on by default; `RemoteControlName`). Installs nothing | every machine, and old ones (see "Claude Code" below) |
 | **controls** | `windows/modules/controls.ps1` | Python, Wireshark, PuTTY; controls-field-tools with the IP Speed Dial and Capture Recipes shortcuts; checks for Npcap, YABE, GlobalProtect | every field laptop |
 | **remote-hub** | `windows/modules/remote-hub.ps1` | mRemoteNG + the ready-made connection list | the machine you drive others from (proxy) |
 | **rdp-host** | `windows/modules/rdp-host.ps1` | Remote Desktop on + firewall; lid close does nothing on AC | a machine the proxy drives (FXWB-1) |
@@ -41,9 +42,9 @@ wallpaper and computer name:
 
 | Machine | File | Pieces |
 |---|---|---|
-| Proxy laptop | `windows/machines/proxy.ps1` | base, preferences, controls, remote-hub |
-| FXWB-1 (FX Workbench field laptop) | `windows/machines/fxwb-1.ps1` | base, preferences, controls, rdp-host, fx-workbench |
-| Any older machine | `windows/machines/existing.ps1` | preferences only: no rename, no wallpaper, no new apps |
+| Proxy laptop | `windows/machines/proxy.ps1` | base, preferences, claude, controls, remote-hub |
+| FXWB-1 (FX Workbench field laptop) | `windows/machines/fxwb-1.ps1` | base, preferences, claude, controls, rdp-host, fx-workbench |
+| Any older machine | `windows/machines/existing.ps1` | preferences + claude: no rename, no wallpaper, no new apps |
 
 **Updating an old machine:** `-Machine existing` applies the shared defaults
 without touching anything else. `-Only <pieces>` runs just the pieces you
@@ -470,6 +471,62 @@ side has the equivalent override (`IDENTITY_TAG` in homelab-bootstrap's
 scale to more properties, and eventually other people's setups, without
 rewriting the pipeline each time.
 
+## Claude Code (no prompts, reachable from the phone)
+
+Brendan, 2026-10-06: *"Claude Code default --dangerously-skip-permissions on
+new machines + sessions set up for remote access."* The `claude` piece
+(`windows/modules/claude.ps1`) does that, per machine, from two keys in the
+machine file:
+
+| Key | Default | What it does |
+|---|---|---|
+| `ClaudeSkipPermissions` | `$false` | `$true` writes `permissions.defaultMode = bypassPermissions` and `skipDangerousModePermissionPrompt` into `~\.claude\settings.json`: Claude Code stops asking before it runs commands or edits files, and never shows the one-time "accept the risks" banner that would stall an unattended start. On for FXWB-1 (single user, driven over RDP and from the phone), off for the proxy laptop and old machines. |
+| `ClaudeRemoteControl` | `$true` | Registers the per-user scheduled task **"Claude Remote Control (\<host\>)"**: at logon and every 15 minutes it runs `claude remote-control` in `%USERPROFILE%\claude-remote`, ignoring a new start while one is running, with no execution time limit. The machine then appears in claude.ai/code and the Claude phone app whenever someone is signed in. `$false` removes the task. |
+| `RemoteControlName` | `<HOST>: <IdentityTag>` | The session name shown in claude.ai/code, e.g. `FXWB-1: FX Workbench`. |
+
+Always set, on every machine: dark theme inside Claude Code, session history
+kept 365 days (default 30), push notifications on, and `remoteControlAtStartup`
+when Remote Control is on, so a session started at the keyboard can be picked
+up from the phone too. These are the same keys dev-1 runs with.
+
+How the task works, and why it is shaped this way:
+
+- **A dedicated folder, pre-trusted.** Claude Code refuses to serve the home
+  folder ("home-directory trust is never saved") and asks to trust any new
+  folder on first use. A scheduled task has no terminal to answer on, so
+  setup creates `%USERPROFILE%\claude-remote` and writes the same key Claude
+  Code writes when you answer yes by hand (`projects[<folder>].hasTrustDialogAccepted`
+  in `~\.claude.json`). That file is only rewritten when the entry is missing,
+  and backed up first.
+- **A launcher script, not a long command line.** `Start-ClaudeRemoteControl.ps1`
+  in that folder finds `claude.exe` at run time (winget's link folder is not on
+  the PATH a scheduled task sees) and leaves `remote-control.log` behind, so a
+  silent failure has somewhere to be read.
+- **Per user, interactive.** Remote Control serves *that person's* Claude
+  account, so the task runs as the account that ran setup, in their session,
+  only while they are signed in. On a shared machine (FXWB-1 is shared with
+  Allen) each person who wants their own sessions runs
+  `setup.ps1 -Machine fxwb-1 -Only claude` once while signed in as themselves.
+- **Sign-in is still a person's job.** If the machine has never signed into
+  Claude Code, the task starts, finds no account, and exits; the log says so.
+  Open PowerShell in `claude-remote`, run `claude` once, sign in, and the next
+  15-minute retry (or Task Scheduler > Run) brings it up.
+- **This is how the other boxes already do it.** dev-1 starts its host from
+  cron at boot (`claude-remote-control-boot`, tmux), the Windows desktop was
+  set up by hand. Putting it in setup means a reimage does not lose it.
+
+**To check:** claude.ai/code lists the machine under its `RemoteControlName`
+within about a minute of setup finishing (or of the next sign-in). Task
+Scheduler shows the task as Running. **To undo:** set the key to `$false` and
+re-run `setup.ps1 ... -Only claude`; or delete the task and the
+`claude-remote` folder by hand.
+
+**Status 2026-10-20:** written and linted on dev-1 (PSScriptAnalyzer); not yet
+run on a Windows machine. The first run on FXWB-1 is the acceptance check on
+the TSK-205 row. The two things most likely to need a touch on first contact
+are the zero execution-time limit (`PT0S`, which Task Scheduler reads as "no
+limit" on Windows 10/11) and the hidden-console start of a TUI program.
+
 ## Troubleshooting
 
 **Screen upside down / rotated after sleep or restart, and Ctrl+Alt+Up
@@ -498,11 +555,32 @@ the end if that happens.
 - [ ] Bitwarden vault accessible from proxy laptop
 - [ ] `gh auth login` done, both private-repo clones succeed
 - [ ] Dark mode applied; identity wallpaper shows PROXY + hostname/IP
+- [ ] Claude Code: the machine appears in claude.ai/code under its `RemoteControlName` after setup, and on FXWB-1 `claude` starts with no permission prompt
 - [ ] "IP Speed Dial (Admin)" desktop shortcut exists and launches elevated with no right-click needed
 - [ ] Ubuntu lock-screen extension installed on both servers, verified session survives a lock
 - [ ] Niagara Workbench / Metasys SCT confirmed and installed manually (separate licensing track)
 
 ## Changelog
+
+### 2026-10-20 (TSK-205)
+- The `claude` piece is complete and on every machine file: no-prompt mode
+  where the machine opts in (`ClaudeSkipPermissions`, now also
+  `skipDangerousModePermissionPrompt`), dark theme, 365-day history, push
+  notifications, and Remote Control at sign-in through a per-user scheduled
+  task in a pre-trusted `claude-remote` folder (`ClaudeRemoteControl`,
+  `RemoteControlName`). See "Claude Code (no prompts, reachable from the
+  phone)". Unverified on Windows until the first FXWB-1 run.
+- Carried from the "Claude code config" branch (2026-10-07..09): the identity
+  wallpaper now renders on a machine with Chrome already open
+  (`--user-data-dir`), switches Windows Spotlight off so it stays put, and
+  falls back through three tiers (homelab-bootstrap theme, the `fx` theme
+  vendored here, a native drawing) instead of silently leaving Spotlight on.
+  `Refresh-IdentityWallpaper.ps1` redraws it at logon and hourly so the
+  Tailscale IP on screen stays true.
+- `Collect-OldLaptop.ps1`: one read-only command on the old laptop that runs
+  every inventory tool here and leaves the answers in one folder.
+- Controls check matches YABE, Tridium, Wireshark and Metasys by how the
+  vendor actually registers them (YABE registers as "Yabe", not "BACnet").
 
 ### 2026-10-06 (2) (TSK-205)
 - New `preferences` piece on every machine: battery = best power efficiency
