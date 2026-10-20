@@ -14,5 +14,9 @@ $MachineConfig = @{
     # phone, so a permission prompt would just stall with nobody to answer it.
     # Single user, so the trade is acceptable -- see windows/modules/claude.ps1.
     ClaudeSkipPermissions = $true
+    # Reachable from claude.ai/code and the phone at every sign-in, under
+    # this name. Sessions it spawns run without prompts (the key above).
+    ClaudeRemoteControl   = $true
+    RemoteControlName     = "FXWB-1: FX Workbench"
     Modules            = @("base", "preferences", "claude", "controls", "rdp-host", "fx-workbench")
 }

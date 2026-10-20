@@ -15,5 +15,9 @@ $MachineConfig = @{
     # person is normally sitting at it and can answer a prompt. Set $true if you
     # start running unattended sessions here too.
     ClaudeSkipPermissions = $false
+    # On: the proxy laptop is usually in a bag between sites, and a session on
+    # it that can be reached from the phone is worth having. Prompts still ask.
+    ClaudeRemoteControl   = $true
+    RemoteControlName     = "PROXY: remote workstation"
     Modules        = @("base", "preferences", "claude", "controls", "remote-hub")
 }

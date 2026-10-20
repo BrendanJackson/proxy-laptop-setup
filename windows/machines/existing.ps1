@@ -10,5 +10,10 @@ $MachineConfig = @{
     ComputerName = $null
     # Off for an old machine: we are not weakening a box we may not know well.
     ClaudeSkipPermissions = $false
+    # Remote Control still goes on: an old machine that can be reached from the
+    # phone is the whole point of updating it. Sessions there ask before acting.
+    ClaudeRemoteControl   = $true
+    # Shown in claude.ai/code. Unset = "<COMPUTERNAME>: Remote Control".
+    RemoteControlName     = $null
     Modules      = @("preferences", "claude")
 }
