@@ -80,7 +80,10 @@ function Read-ClaudeJsonFile([string]$Path) {
     $backup = "$Path.$(Get-Date -Format 'yyyyMMdd-HHmmss').bak"
     try {
         Copy-Item $Path $backup -Force
-        $raw = Get-Content $Path -Raw
+        # Claude Code writes these as UTF-8 without a BOM. Windows PowerShell
+        # reads a BOM-less file as ANSI unless told otherwise, which garbles
+        # every non-ASCII character on the way back out.
+        $raw = Get-Content $Path -Raw -Encoding UTF8
         if ($raw.Trim()) {
             ($raw | ConvertFrom-Json).PSObject.Properties |
                 ForEach-Object { $table[$_.Name] = $_.Value }
@@ -92,6 +95,13 @@ function Read-ClaudeJsonFile([string]$Path) {
         Write-Host "Could not read $Path ($($_.Exception.Message))." -ForegroundColor Red
         return $null
     }
+}
+
+# Write JSON back the way Claude Code writes it: UTF-8, no BOM. Set-Content
+# -Encoding utf8 in Windows PowerShell 5.1 always adds a BOM.
+function Write-ClaudeJsonFile([string]$Path, $Table, [int]$Depth) {
+    $json = [PSCustomObject]$Table | ConvertTo-Json -Depth $Depth
+    [IO.File]::WriteAllText($Path, $json, (New-Object System.Text.UTF8Encoding $false))
 }
 
 # ---- settings.json -----------------------------------------------------------
@@ -151,8 +161,7 @@ Write-Host "Push notifications on (needed to follow a session from the phone)." 
 
 # ---- save --------------------------------------------------------------------
 try {
-    [PSCustomObject]$settings | ConvertTo-Json -Depth 20 |
-        Set-Content -Path $settingsPath -Encoding utf8 -ErrorAction Stop
+    Write-ClaudeJsonFile $settingsPath $settings 20
     Write-Host "`nWrote $settingsPath" -ForegroundColor Green
 }
 catch {
@@ -198,7 +207,11 @@ ClaudeRemoteControl = `$false in this machine's file and re-run setup -Only clau
     }
     else {
         $projects = if ($cfg.Contains("projects") -and $cfg["projects"]) { $cfg["projects"] } else { [PSCustomObject]@{} }
-        $entry = $projects.PSObject.Properties[$remoteDir]
+        # Claude Code keys projects by forward-slash path on Windows
+        # ("C:/Users/x/claude-remote"); a backslash key is never matched, and
+        # the task would sit on the trust question (seen on FXWB-1, 2026-10-23).
+        $trustKey = $remoteDir -replace '\\', '/'
+        $entry = $projects.PSObject.Properties[$trustKey]
         if ($entry -and $entry.Value.PSObject.Properties["hasTrustDialogAccepted"] -and [bool]$entry.Value.hasTrustDialogAccepted) {
             $trusted = $true
             Write-Host "$remoteDir is already trusted by Claude Code." -ForegroundColor Green
@@ -206,11 +219,10 @@ ClaudeRemoteControl = `$false in this machine's file and re-run setup -Only clau
         else {
             $project = if ($entry) { $entry.Value } else { [PSCustomObject]@{ allowedTools = @() } }
             $project | Add-Member -NotePropertyName "hasTrustDialogAccepted" -NotePropertyValue $true -Force
-            $projects | Add-Member -NotePropertyName $remoteDir -NotePropertyValue $project -Force
+            $projects | Add-Member -NotePropertyName $trustKey -NotePropertyValue $project -Force
             $cfg["projects"] = $projects
             try {
-                [PSCustomObject]$cfg | ConvertTo-Json -Depth 100 |
-                    Set-Content -Path $globalConfigPath -Encoding utf8 -ErrorAction Stop
+                Write-ClaudeJsonFile $globalConfigPath $cfg 100
                 $trusted = $true
                 Write-Host "Pre-trusted $remoteDir in ~\.claude.json (so the task never waits on the trust question)." -ForegroundColor Green
             }
@@ -249,7 +261,9 @@ if (-not $claude) {
     "claude.exe not found. Install Claude Code (winget install Anthropic.ClaudeCode) or re-run setup." | Add-Content -Path $log
     exit 1
 }
-& $claude @rcArgs *>> $log
+# Out-File keeps the log UTF-8; '*>>' in Windows PowerShell appends UTF-16
+# after the UTF-8 first line, which leaves a log nobody can read.
+& $claude @rcArgs 2>&1 | ForEach-Object { "$_" } | Out-File -FilePath $log -Append -Encoding utf8
 "$(Get-Date -Format s) exited with code $LASTEXITCODE" | Add-Content -Path $log
 exit $LASTEXITCODE
 '@
@@ -286,7 +300,7 @@ exit $LASTEXITCODE
         Add-ManualStep "The Remote Control scheduled task could not be registered; tell Claude the red line it printed."
     }
 
-    Add-ManualStep "Claude Code: within a minute this machine should appear in claude.ai/code (and the phone app) as '$remoteName'. If it does not: open PowerShell in $remoteDir, run 'claude' once and sign in (the task cannot sign in for you), then wait for the next 15-minute retry or run the task from Task Scheduler. Last output: $remoteDir\remote-control.log"
+    Add-ManualStep "Claude Code: within a minute this machine should appear in claude.ai/code (and the phone app) as '$remoteName'. If it does not: run 'claude auth login' once and finish the browser sign-in (the desktop app's sign-in does not cover the CLI, and the task cannot sign in for you), then wait for the next 15-minute retry or run the task from Task Scheduler. Last output: $remoteDir\remote-control.log"
     if (-not $trusted) {
         Add-ManualStep "The Remote Control task will wait on Claude Code's trust question until $remoteDir has been opened with 'claude' once by hand (see the step above)."
     }
