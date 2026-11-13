@@ -32,7 +32,7 @@ way `homelab-bootstrap` builds the Linux boxes from roles:
 | **base** | `windows/modules/base.ps1` | Tailscale, Bitwarden (Vaultwarden client), VS Code, Notepad++, Brave, Chrome, Git, GitHub CLI, Windows Terminal, Notion, Claude + Claude Code; identity wallpaper; computer name | every machine |
 | **preferences** | `windows/modules/preferences.ps1` | Power: on battery best power efficiency + Energy Saver (screen 5 min, sleep 15 min); plugged in awake 5 h idle (screen off 30 min); fast startup off. System + app dark mode. Conveniences: file extensions and hidden files shown, Explorer opens on This PC, taskbar End task, clipboard history (Win+V), no Bing results in Start, classic right-click menu, long paths, Eastern time. Installs nothing | every machine, and old ones (see below) |
 | **claude** | `windows/modules/claude.ps1` | Claude Code: no permission prompts where the machine file opts in (`ClaudeSkipPermissions`), dark theme, 365-day history, push notifications, and a per-user scheduled task that keeps `claude remote-control` running so the machine shows in claude.ai/code and the phone app at every sign-in (`ClaudeRemoteControl`, on by default; `RemoteControlName`). Installs nothing | every machine, and old ones (see "Claude Code" below) |
-| **controls** | `windows/modules/controls.ps1` | Python, Wireshark, PuTTY; controls-field-tools with the IP Speed Dial and Capture Recipes shortcuts; checks for Npcap, YABE, GlobalProtect | every field laptop |
+| **controls** | `windows/modules/controls.ps1` | Python, Wireshark, PuTTY; controls-field-tools with the IP Speed Dial (desktop, Start menu, taskbar, and its folder pinned in File Explorer) and Capture Recipes shortcuts; checks for Npcap, YABE, GlobalProtect | every field laptop |
 | **remote-hub** | `windows/modules/remote-hub.ps1` | mRemoteNG + the ready-made connection list | the machine you drive others from (proxy) |
 | **rdp-host** | `windows/modules/rdp-host.ps1` | Remote Desktop on + firewall; lid close does nothing on AC | a machine the proxy drives (FXWB-1) |
 | **fx-workbench** | `windows/modules/fx-workbench.ps1` | Checks FX Workbench is installed, points at the license finder (the installer itself is licensed, so it's manual) | FXWB-1 |
@@ -97,6 +97,29 @@ Remote Desktop over Tailscale. Order:
    `gh auth login`, Npcap, YABE, GlobalProtect, FX Workbench.
 4. On the **proxy laptop**, run `Install-MRemoteNG.ps1` again (it now lists
    FXWB-1) and connect once.
+5. Sign the Claude Code **CLI** in once: `claude auth login` (browser). The
+   desktop app's sign-in does not count; until the CLI is signed in, the
+   Remote Control task logs "You must be logged in" and FXWB-1 does not show
+   in the Claude app / claude.ai/code sidebar as **FXWB-1: FX Workbench**.
+
+### Metasys SCT on FXWB-1: turn Smart App Control off first
+
+SCT 19.0 (`SystemConfigurationTool_19.0.0.875.exe`) rolls back with
+**Error 1723** in "Url Rewrite Cache Site Installer" if Windows 11 **Smart App
+Control** is on. Its custom action (`caAddReverseProxyWebsites`) is an unsigned
+JCI DLL, and Smart App Control's `VerifiedAndReputableDesktop` policy refuses
+to load it (Event Viewer > Applications and Services > Microsoft > Windows >
+CodeIntegrity > Operational, event 3077 naming `msiexec.exe` and
+`C:\Windows\Installer\MSI*.tmp`). Seen twice on FXWB-1, 2026-10-23.
+
+- Settings > Privacy & security > Windows Security > App & browser control >
+  Smart App Control settings > **Off**. (Once off it cannot be turned back on
+  without resetting Windows; Defender still runs.)
+- Run the installer again as Administrator. Expect step 1 ("DISMHelper") to
+  sit for up to ~30 minutes on a fresh machine: it downloads .NET 3.5 and the
+  SNMP feature from Windows Update. It is working, not stuck; the progress bar
+  just doesn't move. A re-run skips it in seconds.
+- Installer logs: `%TEMP%\System_Configuration_Tool_(SCT)_19.0.0.875_*.log`.
 
 ### Moving GlobalProtect from the old laptop
 
@@ -561,6 +584,23 @@ the end if that happens.
 - [ ] Niagara Workbench / Metasys SCT confirmed and installed manually (separate licensing track)
 
 ## Changelog
+
+### 2026-10-23 (FXWB-1)
+- IP Speed Dial now also goes in the Start menu (the same "IP Speed Dial"
+  entry controls-field-tools' TSK-348 `Install-Shortcut.ps1` makes: no console
+  window, opens as administrator), is pinned to the taskbar (Windows 11
+  taskbar layout policy, appended, per user), and its `speed-dial` folder is
+  pinned in File Explorer.
+- Private-repo clone falls back to plain `git clone` when `gh` is signed in
+  with a token that can't see the repo. On FXWB-1 that is why
+  controls-field-tools and homelab-bootstrap were never cloned.
+- claude module: the Remote Control folder is pre-trusted under the
+  forward-slash key Claude Code actually uses (the backslash key never
+  matched); `~\.claude.json` and `settings.json` are read and written as UTF-8
+  without a BOM (Windows PowerShell added a BOM and misread non-ASCII text);
+  the Remote Control log is plain UTF-8. New manual step: `claude auth login`.
+- Documented the SCT 19.0 install failure (Smart App Control blocks JCI's
+  unsigned custom action) and the slow first step.
 
 ### 2026-10-20 (TSK-205)
 - The `claude` piece is complete and on every machine file: no-prompt mode

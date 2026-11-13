@@ -101,19 +101,35 @@ function Sync-PrivateRepo {
         return $false
     }
     gh repo clone $Repo $Dir
-    return $?
+    if ($LASTEXITCODE -eq 0) { return $true }
+    # gh can be signed in with a fine-grained token that only covers some
+    # repos (FXWB-1, 2026-10-23: "Could not resolve to a Repository") while
+    # Git Credential Manager holds a login that does see them. Try plain git.
+    Write-Host "gh could not clone $Repo -- trying git with the saved Git credentials." -ForegroundColor DarkYellow
+    if (Test-Path $Dir) { Remove-Item $Dir -Recurse -Force }
+    git clone "https://github.com/$Repo.git" $Dir
+    if ($LASTEXITCODE -eq 0) { return $true }
+    Add-ManualStep "Could not clone $Repo with gh or git. Run 'gh auth login' (choose a login that can see private repos), then re-run setup."
+    return $false
 }
 
 # Desktop shortcut with the "Run as administrator" flag set, so a plain
 # double-click elevates. Windows still shows the UAC prompt each launch; this
 # only removes the right-click step.
 function New-ElevatedShortcut {
-    param([string]$Name, [string]$Target, [string]$Description)
-    $lnkPath = Join-Path ([Environment]::GetFolderPath("Desktop")) "$Name.lnk"
+    param([string]$Name, [string]$Target, [string]$Description,
+          # Where the .lnk goes; the Desktop unless told otherwise (e.g. a
+          # Start menu Programs folder).
+          [string]$Folder = [Environment]::GetFolderPath("Desktop"),
+          [string]$Arguments, [string]$WorkingDirectory, [string]$Icon)
+    New-Item -ItemType Directory -Path $Folder -Force | Out-Null
+    $lnkPath = Join-Path $Folder "$Name.lnk"
     $wsh = New-Object -ComObject WScript.Shell
     $shortcut = $wsh.CreateShortcut($lnkPath)
     $shortcut.TargetPath = $Target
-    $shortcut.WorkingDirectory = Split-Path $Target -Parent
+    if ($Arguments) { $shortcut.Arguments = $Arguments }
+    $shortcut.WorkingDirectory = if ($WorkingDirectory) { $WorkingDirectory } else { Split-Path $Target -Parent }
+    if ($Icon) { $shortcut.IconLocation = $Icon }
     $shortcut.Description = $Description
     $shortcut.Save()
     # .lnk byte 0x15 bit 0x20 is the "run as administrator" flag -- not exposed
@@ -134,6 +150,66 @@ function New-DesktopShortcut {
     $shortcut.Description = $Description
     $shortcut.Save()
     return $lnkPath
+}
+
+# Pin Start menu shortcuts to the taskbar. Windows 11 has no API or verb for
+# this any more; the supported route is a taskbar layout XML named by the
+# StartLayoutFile policy. PinListPlacement="Append" adds to whatever is already
+# pinned instead of replacing it, and Windows applies a given layout once, so
+# anything the person unpins later stays unpinned. Per user (HKCU), takes
+# effect when Explorer restarts or at the next sign-in. Every pin this repo
+# wants goes in one call: the file is rewritten each time.
+function Set-TaskbarPins {
+    param([string[]]$LinkPaths)
+    $layoutDir = Join-Path $env:LOCALAPPDATA "proxy-laptop-setup"
+    New-Item -ItemType Directory -Path $layoutDir -Force | Out-Null
+    $layout = Join-Path $layoutDir "TaskbarLayout.xml"
+    $pins = ($LinkPaths | ForEach-Object {
+        "        <taskbar:DesktopApp DesktopApplicationLinkPath=`"$([Security.SecurityElement]::Escape($_))`" />"
+    }) -join "`r`n"
+    @"
+<?xml version="1.0" encoding="utf-8"?>
+<LayoutModificationTemplate
+    xmlns="http://schemas.microsoft.com/Start/2014/LayoutModification"
+    xmlns:defaultlayout="http://schemas.microsoft.com/Start/2014/FullDefaultLayout"
+    xmlns:start="http://schemas.microsoft.com/Start/2014/StartLayout"
+    xmlns:taskbar="http://schemas.microsoft.com/Start/2014/TaskbarLayout"
+    Version="1">
+  <CustomTaskbarLayoutCollection PinListPlacement="Append">
+    <defaultlayout:TaskbarLayout>
+      <taskbar:TaskbarPinList>
+$pins
+      </taskbar:TaskbarPinList>
+    </defaultlayout:TaskbarLayout>
+  </CustomTaskbarLayoutCollection>
+</LayoutModificationTemplate>
+"@ | Set-Content -Path $layout -Encoding utf8
+    # HKCU\Software\Policies is writable only from an elevated shell, which
+    # is how setup normally runs; say so instead of failing quietly.
+    $key = "HKCU:\Software\Policies\Microsoft\Windows\Explorer"
+    try {
+        if (-not (Test-Path $key)) { New-Item -Path $key -Force -ErrorAction Stop | Out-Null }
+        Set-ItemProperty -Path $key -Name StartLayoutFile -Value $layout -ErrorAction Stop
+        # 0 = the person can still pin, unpin and rearrange as they like.
+        Set-ItemProperty -Path $key -Name LockedStartLayout -Value 0 -Type DWord -ErrorAction Stop
+        return $layout
+    }
+    catch {
+        Write-Host "Could not set the taskbar layout policy ($($_.Exception.Message)). Run setup as Administrator." -ForegroundColor DarkYellow
+        return $null
+    }
+}
+
+# Pin a folder to File Explorer's Quick Access ("Home"). Same as right-click >
+# Pin to Quick access; re-running is harmless.
+function Add-QuickAccessPin([string]$Folder) {
+    $shell = New-Object -ComObject Shell.Application
+    $self = $shell.Namespace($Folder).Self
+    # Explorer only offers "pintohome" on a folder that is not pinned yet
+    # (a pinned one offers "unpinfromhome"), so its presence is the check.
+    if (-not ($self.Verbs() | Where-Object { ($_.Name -replace '&', '') -match '^Pin to (Quick access|Home)' })) { return $false }
+    $self.InvokeVerb("pintohome")
+    return $true
 }
 
 # Identity wallpaper. Reuses the template + headless-Chrome render pipeline

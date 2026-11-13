@@ -34,6 +34,31 @@ if (Test-Path $speedDialBat) {
     New-ElevatedShortcut -Name "IP Speed Dial (Admin)" -Target $speedDialBat `
         -Description "IP Speed Dial, pre-elevated (double-click, no right-click needed)" | Out-Null
     Write-Host "Desktop shortcut created: 'IP Speed Dial (Admin)'." -ForegroundColor Green
+
+    # Start menu entry, pinned to the taskbar, and the speed-dial folder pinned
+    # in File Explorer (Brendan, 2026-10-23, on FXWB-1). The Start menu
+    # shortcut is the one controls-field-tools' own Install-Shortcut.ps1 makes
+    # (TSK-348: same name and place, powershell with no console window, run as
+    # administrator), written here directly because that script stops on a
+    # message box. Either one re-running just overwrites the other.
+    $speedDialPs1 = Join-Path $ToolsDir "speed-dial\IP-SpeedDial.ps1"
+    $speedDialIcon = Join-Path $ToolsDir "speed-dial\IP-SpeedDial.ico"
+    if (-not (Test-Path $speedDialIcon)) { $speedDialIcon = "$env:SystemRoot\System32\shell32.dll,18" }
+    $startLnk = New-ElevatedShortcut -Name "IP Speed Dial" -Folder ([Environment]::GetFolderPath("Programs")) `
+        -Target (Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe") `
+        -Arguments "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$speedDialPs1`"" `
+        -WorkingDirectory (Split-Path $speedDialPs1 -Parent) -Icon $speedDialIcon `
+        -Description "IP Speed Dial - one-click site IP switching"
+    Write-Host "Start menu shortcut created: IP Speed Dial (opens as administrator)." -ForegroundColor Green
+    if (Set-TaskbarPins -LinkPaths @($startLnk)) {
+        Write-Host "Taskbar pin queued for IP Speed Dial (shows after Explorer restarts or the next sign-in)." -ForegroundColor Green
+    }
+    else {
+        Add-ManualStep "Pin IP Speed Dial to the taskbar: Start > IP Speed Dial > right-click > Pin to taskbar (or re-run setup as Administrator)."
+    }
+    $speedDialDir = Split-Path $speedDialBat -Parent
+    if (Add-QuickAccessPin $speedDialDir) { Write-Host "Pinned $speedDialDir in File Explorer (Quick access)." -ForegroundColor Green }
+    else { Write-Host "$speedDialDir already pinned in File Explorer." -ForegroundColor Green }
 }
 else {
     Write-Host "Skipped -- $speedDialBat not found (controls-field-tools not cloned yet)." -ForegroundColor DarkYellow
