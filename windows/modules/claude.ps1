@@ -274,9 +274,10 @@ exit $LASTEXITCODE
     #    THIS person's Claude account, so it runs as them, in their session,
     #    and only while they are signed in. IgnoreNew + no time limit keep one
     #    long-lived host; the 15-minute repeat is only a retry for after a
-    #    crash, a sign-out or a network drop.
-    $action = New-ScheduledTaskAction -Execute 'powershell.exe' `
-        -Argument ('-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}"' -f $launcherPath)
+    #    crash, a sign-out or a network drop. 'conhost --headless' because
+    #    -WindowStyle Hidden still flashes a console window on every run.
+    $action = New-ScheduledTaskAction -Execute 'conhost.exe' `
+        -Argument ('--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File "{0}"' -f $launcherPath)
     $triggers = @(
         (New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME")
         (New-ScheduledTaskTrigger -Once -At (Get-Date).Date `

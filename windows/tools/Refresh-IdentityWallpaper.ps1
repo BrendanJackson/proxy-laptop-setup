@@ -102,13 +102,15 @@ if ($Install) {
     # tasks would fight over the wallpaper every hour.
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 
-    $argLine = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}"' -f $PSCommandPath
+    # 'conhost --headless' because -WindowStyle Hidden still flashes a console
+    # window every hour.
+    $argLine = '--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File "{0}"' -f $PSCommandPath
     foreach ($p in 'Label', 'HostName', 'Tag', 'Theme') {
         $v = (Get-Variable $p -ValueOnly -ErrorAction SilentlyContinue)
         if ($v) { $argLine += ' -{0} "{1}"' -f $p, $v }
     }
 
-    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $argLine
+    $action = New-ScheduledTaskAction -Execute 'conhost.exe' -Argument $argLine
     $triggers = @(
         (New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME")
         (New-ScheduledTaskTrigger -Once -At (Get-Date).Date `
